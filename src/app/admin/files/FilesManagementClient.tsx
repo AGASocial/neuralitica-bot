@@ -1,0 +1,538 @@
+'use client'
+
+import { useState, useEffect, useRef } from 'react'
+import { formatDateVE } from '@/lib/date-utils'
+
+interface PriceList {
+  id: string
+  file_name: string
+  supplier_name: string | null
+  storage_path: string
+  openai_file_id: string | null
+  openai_vector_file_id: string | null
+  is_active: boolean
+  uploaded_at: string
+}
+
+interface VectorStoreStatus {
+  status: string
+  file_counts: {
+    completed: number
+    in_progress: number
+    failed: number
+    total: number
+  }
+  health_status: string
+}
+
+interface VectorStoreStatusBadgeProps {
+  priceListId: string
+  vectorStatus: Record<string, VectorStoreStatus>
+  statusLoading: boolean
+}
+
+function VectorStoreStatusBadge({ priceListId, vectorStatus, statusLoading }: VectorStoreStatusBadgeProps) {
+  if (statusLoading) {
+    return (
+      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">
+        <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-gray-600 mr-1"></div>
+        Verificando...
+      </span>
+    )
+  }
+
+  const status = vectorStatus[priceListId]
+  if (!status) {
+    return (
+      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">
+        ❓ Desconocido
+      </span>
+    )
+  }
+
+  const getStatusDisplay = () => {
+    if (status.health_status === 'healthy') {
+      return {
+        bg: 'bg-green-100 text-green-800',
+        icon: '✅',
+        text: 'Listo',
+        shortText: 'OK'
+      }
+    }
+    
+    if (status.health_status === 'partially_healthy') {
+      return {
+        bg: 'bg-yellow-100 text-yellow-800',
+        icon: '⚡',
+        text: `Procesando (${status.file_counts.completed}/${status.file_counts.total})`,
+        shortText: `${status.file_counts.completed}/${status.file_counts.total}`
+      }
+    }
+    
+    if (status.status === 'in_progress') {
+      return {
+        bg: 'bg-blue-100 text-blue-800',
+        icon: '🔄',
+        text: `Procesando (${status.file_counts.in_progress} archivos)`,
+        shortText: `${status.file_counts.in_progress}`
+      }
+    }
+    
+    if (status.health_status === 'unhealthy' || status.status === 'failed') {
+      return {
+        bg: 'bg-red-100 text-red-800',
+        icon: '❌',
+        text: 'Falló',
+        shortText: 'Err'
+      }
+    }
+    
+    return {
+      bg: 'bg-gray-100 text-gray-600',
+      icon: '❓',
+      text: status.status || 'Desconocido',
+      shortText: '?'
+    }
+  }
+
+  const display = getStatusDisplay()
+  
+  return (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${display.bg}`}>
+      <span className="mr-1">{display.icon}</span>
+      <span className="hidden sm:inline">{display.text}</span>
+      <span className="sm:hidden">{display.shortText}</span>
+    </span>
+  )
+}
+
+export default function FilesManagementClient() {
+  const [files, setFiles] = useState<PriceList[]>([])
+  const [loading, setLoading] = useState(true)
+  const [uploading, setUploading] = useState(false)
+  const [searchTerm, setSearchTerm] = useState('')
+  const [vectorStatus, setVectorStatus] = useState<Record<string, VectorStoreStatus>>({})
+  const [statusLoading, setStatusLoading] = useState(false)
+  const [syncing, setSyncing] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const intervalRef = useRef<NodeJS.Timeout | null>(null)
+
+  // Helper function to check if any files are still processing
+  const hasProcessingFiles = (statusMap: Record<string, VectorStoreStatus>) => {
+    return Object.values(statusMap).some(status => 
+      status.health_status !== 'healthy' || 
+      status.status === 'in_progress' || 
+      status.file_counts.in_progress > 0 ||
+      status.file_counts.completed < status.file_counts.total
+    )
+  }
+
+  // Function to start/stop polling based on processing status
+  const managePollInterval = (statusMap: Record<string, VectorStoreStatus>) => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current)
+      intervalRef.current = null
+    }
+
+    if (hasProcessingFiles(statusMap)) {
+      console.log('🔄 Some files are still processing, continuing polling...')
+      intervalRef.current = setInterval(() => {
+        fetchVectorStoreStatus()
+      }, 30000)
+    } else {
+      console.log('✅ All files completed, stopping polling')
+    }
+  }
+
+  useEffect(() => {
+    fetchFiles()
+    fetchVectorStoreStatus()
+    
+    // Cleanup interval on unmount
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current)
+      }
+    }
+  }, [])
+
+  const fetchFiles = async () => {
+    try {
+      const response = await fetch('/api/admin/files')
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch files')
+      }
+      
+      const data = await response.json()
+      setFiles(data.files || [])
+    } catch (error) {
+      console.error('Error fetching files:', error)
+      setFiles([])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const fetchVectorStoreStatus = async () => {
+    try {
+      setStatusLoading(true)
+      const response = await fetch('/api/admin/vector-store-status')
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch vector store status')
+      }
+      
+      const data = await response.json()
+      const statusMap: Record<string, VectorStoreStatus> = {}
+      
+      // Create a map of price list ID to vector store status
+      data.vector_stores.forEach((store: any) => {
+        statusMap[store.database_info.price_list_id] = {
+          status: store.vector_store_info.status,
+          file_counts: store.vector_store_info.file_counts,
+          health_status: store.health_status
+        }
+      })
+      
+      setVectorStatus(statusMap)
+      
+      // Manage polling based on processing status
+      managePollInterval(statusMap)
+    } catch (error) {
+      console.error('Error fetching vector store status:', error)
+    } finally {
+      setStatusLoading(false)
+    }
+  }
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    if (file.type !== 'application/pdf') {
+      alert('Por favor selecciona un archivo PDF')
+      return
+    }
+
+    setUploading(true)
+
+    try {
+      // Upload directly to OpenAI Files API (MVP approach)
+      console.log('Uploading PDF directly to OpenAI for ultra-fast processing...')
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('supplier_name', '') // Can be enhanced with supplier input
+      // User ID will be extracted from session on server-side
+
+      const openaiResponse = await fetch('/api/openai/upload-pdf', {
+        method: 'POST',
+        body: formData,
+      })
+
+      if (!openaiResponse.ok) {
+        const errorData = await openaiResponse.json()
+        throw new Error(`OpenAI upload failed: ${errorData.error}`)
+      }
+
+      const openaiResult = await openaiResponse.json()
+      console.log(`OpenAI upload completed in ${openaiResult.processing_time_ms}ms`)
+
+      // Refresh files list and restart polling for new upload
+      await fetchFiles()
+      await fetchVectorStoreStatus() // This will restart polling if needed
+      
+      // Clear file input
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+
+      alert(`¡Archivo subido exitosamente a OpenAI!\n\nID del archivo: ${openaiResult.openai_file_id}\nTiempo de procesamiento: ${openaiResult.processing_time_ms}ms\n\nEl archivo está listo para ser activado para consultas de precios ultra-rápidas.`)
+    } catch (error: any) {
+      console.error('Error uploading file:', error)
+      alert(`Error al subir archivo: ${error.message}`)
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const toggleFileStatus = async (id: string, currentStatus: boolean) => {
+    try {
+      console.log(`${currentStatus ? 'Deactivating' : 'Activating'} file with vector store management...`)
+      
+      // Use OpenAI management API for vector store handling
+      const response = await fetch('/api/openai/manage-file', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'toggle_active',
+          priceListId: id,
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(`Vector store management failed: ${errorData.error}`)
+      }
+
+      const result = await response.json()
+      console.log(`File status toggled in ${result.processing_time_ms}ms`)
+
+      // Update local state
+      setFiles(files.map(file => 
+        file.id === id ? { 
+          ...file, 
+          is_active: result.is_active,
+          openai_vector_file_id: result.vector_store_id || file.openai_vector_file_id
+        } : file
+      ))
+
+      // Refresh vector store status since file activation may trigger processing
+      await fetchVectorStoreStatus()
+
+      alert(`¡Archivo ${result.is_active ? 'activado' : 'desactivado'} exitosamente! Tiempo de procesamiento: ${result.processing_time_ms}ms`)
+    } catch (error: any) {
+      console.error('Error toggling file status:', error)
+      alert(`Error al actualizar archivo: ${error.message}`)
+    }
+  }
+
+  const deleteFile = async (id: string, storagePath: string) => {
+    if (!confirm('¿Estás seguro de que quieres eliminar este archivo? Esto lo eliminará de OpenAI, almacenes vectoriales y todos los sistemas de almacenamiento.')) {
+      return
+    }
+
+    try {
+      console.log('Initiating complete file deletion from all systems...')
+      
+      // Use comprehensive deletion API
+      const response = await fetch('/api/openai/manage-file', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'delete_complete',
+          priceListId: id,
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(`Deletion failed: ${errorData.error}`)
+      }
+
+      const result = await response.json()
+      console.log(`Complete deletion finished in ${result.processing_time_ms}ms`)
+
+      // Update local state
+      setFiles(files.filter(file => file.id !== id))
+      
+      if (result.success) {
+        alert(`¡Archivo eliminado exitosamente de todos los sistemas! Tiempo de procesamiento: ${result.processing_time_ms}ms`)
+      } else {
+        alert(`Eliminación parcial completada. Algunos sistemas pueden requerir limpieza manual. Tiempo de procesamiento: ${result.processing_time_ms}ms`)
+      }
+    } catch (error: any) {
+      console.error('Error deleting file:', error)
+      alert(`Error al eliminar archivo: ${error.message}`)
+    }
+  }
+
+  const syncMasterVectorStore = async () => {
+    if (!confirm('¿Estás seguro de que quieres sincronizar el Master Vector Store? Esto asegurará que todos los archivos activos estén correctamente sincronizados.')) {
+      return
+    }
+
+    setSyncing(true)
+
+    try {
+      console.log('Iniciando sincronización del Master Vector Store...')
+      
+      const response = await fetch('/api/openai/manage-file', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          action: 'sync_master_store',
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(`Sync failed: ${errorData.error}`)
+      }
+
+      const result = await response.json()
+      console.log(`Master Vector Store sync completed in ${result.processing_time_ms}ms`)
+
+      // Refresh vector store status after sync
+      await fetchVectorStoreStatus()
+      
+      alert(`¡Sincronización completada exitosamente!\n\nArchivos agregados: ${result.sync_result.added}\nArchivos removidos: ${result.sync_result.removed}\nTiempo de procesamiento: ${result.processing_time_ms}ms`)
+    } catch (error: any) {
+      console.error('Error syncing master vector store:', error)
+      alert(`Error al sincronizar: ${error.message}`)
+    } finally {
+      setSyncing(false)
+    }
+  }
+
+  const filteredFiles = files.filter(file =>
+    file.file_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (file.supplier_name && file.supplier_name.toLowerCase().includes(searchTerm.toLowerCase()))
+  )
+
+  if (loading) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="animate-pulse">
+          <div className="h-8 bg-gray-200 rounded mb-4"></div>
+          <div className="h-10 bg-gray-200 rounded mb-4"></div>
+          <div className="space-y-3">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-16 bg-gray-200 rounded"></div>
+            ))}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      {/* Upload Section */}
+      <div className="bg-white p-6 rounded-lg shadow mb-8">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">Subir PDF</h2>
+        <div className="flex items-center space-x-4">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".pdf"
+            onChange={handleFileUpload}
+            disabled={uploading}
+            className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+          />
+          {uploading && (
+            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+          )}
+        </div>
+      </div>
+
+      {/* Master Vector Store Management */}
+      <div className="bg-white p-6 rounded-lg shadow mb-8">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">Master Vector Store</h2>
+        <div className="flex items-center space-x-4">
+          <button
+            onClick={syncMasterVectorStore}
+            disabled={syncing}
+            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {syncing ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                Sincronizando...
+              </>
+            ) : (
+              <>
+                🔄 Sincronizar Todo
+              </>
+            )}
+          </button>
+          <p className="text-sm text-gray-600">
+            Sincroniza todos los archivos activos con el Master Vector Store para asegurar consistencia
+          </p>
+        </div>
+      </div>
+
+      {/* Search */}
+      <div className="mb-6">
+        <input
+          type="text"
+          placeholder="Buscar archivos por nombre o proveedor..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="w-full px-4 py-2 border border-gray-300 text-black rounded-md focus:ring-blue-500 focus:border-blue-500 placeholder:text-gray-500"
+        />
+      </div>
+
+      {/* Files List */}
+      <div className="bg-white shadow overflow-hidden rounded-md">
+        {filteredFiles.length === 0 ? (
+          <div className="p-6 text-center text-gray-500">
+            {searchTerm ? 'No se encontraron archivos que coincidan con tu búsqueda.' : 'Aún no se han subido archivos.'}
+          </div>
+        ) : (
+          <ul className="divide-y divide-gray-200">
+            {filteredFiles.map((file) => (
+              <li key={file.id} className="p-4 sm:p-6">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
+                  <div className="flex items-center min-w-0 flex-1">
+                    <div className={`w-3 h-3 rounded-full mr-3 flex-shrink-0 ${
+                      file.is_active ? 'bg-green-500' : 'bg-gray-400'
+                    }`}></div>
+                    <div className="min-w-0 flex-1">
+                      <h3 className="text-sm font-medium text-gray-900 truncate">
+                        {file.file_name}
+                      </h3>
+                      <p className="text-sm text-gray-500">
+                        {file.supplier_name || 'Sin proveedor especificado'}
+                      </p>
+                      <p className="text-xs text-gray-400 mt-1">
+                        Subido {formatDateVE(file.uploaded_at)}
+                      </p>
+                      <div className="flex flex-wrap items-center gap-2 mt-2">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium flex-shrink-0 ${
+                          file.openai_file_id 
+                            ? 'bg-green-100 text-green-800' 
+                            : 'bg-yellow-100 text-yellow-800'
+                        }`}>
+                          <span className="hidden sm:inline">{file.openai_file_id ? '✓ OpenAI Listo' : '⏳ Procesando'}</span>
+                          <span className="sm:hidden">{file.openai_file_id ? '✓ Listo' : '⏳'}</span>
+                        </span>
+                        {file.openai_vector_file_id && (
+                          <VectorStoreStatusBadge 
+                            priceListId={file.id}
+                            vectorStatus={vectorStatus}
+                            statusLoading={statusLoading}
+                          />
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Action buttons - stack on mobile, inline on desktop */}
+                  <div className="flex flex-wrap items-center gap-2 sm:space-x-2 sm:flex-nowrap">
+                    <button
+                      onClick={() => toggleFileStatus(file.id, file.is_active)}
+                      className={`inline-flex items-center px-2 sm:px-3 py-1 rounded-full text-xs font-medium flex-shrink-0 ${
+                        file.is_active
+                          ? 'bg-green-100 text-green-800 hover:bg-green-200'
+                          : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
+                      }`}
+                    >
+                      <span className="mr-1">{file.is_active ? '🟢' : '⚫'}</span>
+                      <span className="hidden sm:inline">{file.is_active ? 'Activo' : 'Inactivo'}</span>
+                      <span className="sm:hidden">{file.is_active ? 'On' : 'Off'}</span>
+                    </button>
+                    <button
+                      onClick={() => deleteFile(file.id, file.storage_path)}
+                      className="inline-flex items-center px-2 sm:px-3 py-1 bg-red-100 text-red-800 rounded-full text-xs font-medium hover:bg-red-200 flex-shrink-0"
+                    >
+                      <span className="mr-1">🗑️</span>
+                      <span className="hidden sm:inline">Eliminar</span>
+                      <span className="sm:hidden">Del</span>
+                    </button>
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  )
+}
