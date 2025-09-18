@@ -21,9 +21,9 @@ This is the NeuraliticaBot MVP - a B2B SaaS platform for Venezuelan auto parts r
    ```
 
 2. **Environment Variables:**
-   Copy `.env.example` to `.env.local` and fill in your credentials:
+   Copy `env.template` to `.env.local` and fill in your credentials:
    ```bash
-   cp .env.example .env.local
+   cp env.template .env.local
    ```
 
    Required variables:
@@ -31,6 +31,13 @@ This is the NeuraliticaBot MVP - a B2B SaaS platform for Venezuelan auto parts r
    - `NEXT_PUBLIC_SUPABASE_ANON_KEY` - Your Supabase anon key
    - `SUPABASE_SERVICE_ROLE_KEY` - Your Supabase service role key
    - `OPENAI_API_KEY` - Your OpenAI API key
+   - `OPENAI_USE_HELICONE` - Toggle Helicone proxy (`true`/`false`)
+   - `HELICONE_API_KEY` - Required if using Helicone
+   - Optional overrides: `OPENAI_BASE_URL`, `HELICONE_BASE_URL`, `HELICONE_CACHE_ENABLED`, `HELICONE_PROPERTY_APP`
+
+   To enable Helicone:
+   - Set `OPENAI_USE_HELICONE=true`
+   - Set `HELICONE_API_KEY` (and `HELICONE_BASE_URL` if using a custom endpoint)
    - `NEXT_PUBLIC_APP_URL` - Your app URL (http://localhost:3000 for development)
 
 ## 🗄️ Database Setup

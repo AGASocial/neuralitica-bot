@@ -1,18 +1,4 @@
-import OpenAI from 'openai'
-
-if (!process.env.OPENAI_API_KEY) {
-  throw new Error('Missing OPENAI_API_KEY environment variable')
-}
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-  baseURL: "https://oai.helicone.ai/v1",
-  defaultHeaders: {
-    "Helicone-Auth": "Bearer " + process.env.HELICONE_API_KEY,
-    "Helicone-Cache-Enabled": "true",
-    "Cache-Control": "max-age=86400", // 1 day
-  }
-});
+import { openai } from './openai-client'
 
 export interface ChatMessage {
   role: 'user' | 'assistant'
