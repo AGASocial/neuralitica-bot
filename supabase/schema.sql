@@ -60,6 +60,14 @@ create table if not exists public.admins (
   created_at timestamptz default now()
 );
 
+-- Application-wide settings (single-row table)
+create table if not exists public.app_settings (
+  id integer primary key default 1 check (id = 1),
+  system_instructions text,
+  updated_by uuid references auth.users(id) on update cascade on delete set null,
+  updated_at timestamptz default now()
+);
+
 -- Indexes
 create index if not exists idx_user_profiles_is_active on public.user_profiles(is_active);
 create index if not exists idx_user_profiles_role on public.user_profiles(role);
@@ -118,6 +126,7 @@ alter table public.price_lists enable row level security;
 alter table public.conversations enable row level security;
 alter table public.messages enable row level security;
 alter table public.admins enable row level security;
+alter table public.app_settings enable row level security;
 
 -- user_profiles policies
 drop policy if exists user_profiles_select_all_admins on public.user_profiles;
@@ -175,6 +184,34 @@ create policy messages_user_access on public.messages
 drop policy if exists admins_select_self on public.admins;
 create policy admins_select_self on public.admins
   for select to public using (auth.uid() = user_id);
+
+-- app_settings policies (admins can read/write; authenticated can read)
+drop policy if exists app_settings_read_all on public.app_settings;
+create policy app_settings_read_all on public.app_settings
+  for select to public using (auth.role() = 'authenticated');
+
+drop policy if exists app_settings_admin_update on public.app_settings;
+create policy app_settings_admin_update on public.app_settings
+  for insert to public with check (
+    exists (select 1 from public.user_profiles up where up.id = auth.uid() and up.role = 'ADMIN')
+    or exists (select 1 from public.admins a where a.user_id = auth.uid())
+  );
+
+drop policy if exists app_settings_admin_upd on public.app_settings;
+create policy app_settings_admin_upd on public.app_settings
+  for update to public using (
+    exists (select 1 from public.user_profiles up where up.id = auth.uid() and up.role = 'ADMIN')
+    or exists (select 1 from public.admins a where a.user_id = auth.uid())
+  );
+
+-- Seed a default row if empty (id=1)
+do $$
+begin
+  if not exists (select 1 from public.app_settings where id = 1) then
+    insert into public.app_settings (id, system_instructions)
+    values (1, null);
+  end if;
+end $$;
 
 -- Notes:
 -- - This schema assumes extensions schemas exist (extensions/graphql/vault) as on Supabase.

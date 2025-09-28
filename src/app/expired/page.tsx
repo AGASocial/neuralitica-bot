@@ -43,7 +43,7 @@ export default function ExpiredPage() {
 
   const handleContactAdmin = () => {
     // You can customize this to open email client or contact form
-    alert('Slander Ramírez +58 412-2312639')
+    alert('Soporte --- info@neuraliti.ca')
     return;
   }
 
@@ -158,7 +158,7 @@ export default function ExpiredPage() {
             </div>
 
             <div className="text-center text-xs text-gray-500">
-              <p>¿Necesitas ayuda? Contacta al soporte en info+neuraliticabot@aga.social</p>
+              <p>¿Necesitas ayuda? Contacta al soporte en info@neuraliti.ca</p>
             </div>
           </div>
         </div>

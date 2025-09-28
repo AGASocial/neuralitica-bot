@@ -1,4 +1,46 @@
 import { openai } from './openai-client'
+import { createSupabaseAdmin } from '@/lib/supabase'
+
+let cachedSystemInstructions: { text: string | null; fetchedAt: number } | null = null
+const INSTRUCTIONS_CACHE_TTL_MS = 60_000
+
+// Expose helpers to allow other modules (e.g., admin settings API) to refresh cache immediately
+export function setSystemInstructionsCache(text: string | null) {
+  cachedSystemInstructions = { text, fetchedAt: Date.now() }
+}
+
+export function invalidateSystemInstructionsCache() {
+  cachedSystemInstructions = null
+}
+
+async function getSystemInstructions(): Promise<string | null> {
+  const now = Date.now()
+  if (cachedSystemInstructions && now - cachedSystemInstructions.fetchedAt < INSTRUCTIONS_CACHE_TTL_MS) {
+    console.log('cachedSystemInstructions', cachedSystemInstructions.text);
+    return cachedSystemInstructions.text
+  }
+  try {
+    const supabase = createSupabaseAdmin()
+    const { data, error } = await supabase
+      .from('app_settings')
+      .select('system_instructions')
+      .eq('id', 1)
+      .maybeSingle()
+    if (error) {
+      console.warn('Failed to fetch system instructions, using default:', error)
+      cachedSystemInstructions = { text: null, fetchedAt: now }
+      return null
+    }
+    const text = data?.system_instructions || null
+    cachedSystemInstructions = { text, fetchedAt: now }
+    console.log('text', text);
+    return text
+  } catch (e) {
+    console.warn('Error reading system instructions, using default:', e)
+    cachedSystemInstructions = { text: null, fetchedAt: now }
+    return null
+  }
+}
 
 export interface ChatMessage {
   role: 'user' | 'assistant'
@@ -24,13 +66,18 @@ export async function queryPricesFast(
 
   try {
     if (vectorStoreIds.length === 0) {
-      // Fallback: plain chat (no retrieval)
-      const systemPrompt = `Eres un asistente especializado en consultas de precios para el mercado B2B venezolano.
-INSTRUCCIONES: Responde en español venezolano de manera concisa y profesional.
-Si no tienes información específica de precios, indica que necesitas acceso a los catálogos de precios.`
+      // Fallback: plain chat (no retrieval). Used when no vector stores are available.
+      const systemPrompt = `Eres un asistente que responde preguntas basándote principalmente en los documentos y archivos proporcionados (PDF, DOCX, CSV, imágenes, etc.).
+Instrucciones:
+- Prioriza la información que puedas recuperar de los archivos disponibles.
+- Si no hay evidencia suficiente en los archivos, dilo explícitamente y sugiere cargar/activar los documentos necesarios.
+- Mantén las respuestas breves, claras y directas.
+- No inventes datos ni hagas suposiciones.
+- Cuando sea posible, menciona el archivo (o fuente) del que extraes la información.`
 
+      const dynamicInstructions = await getSystemInstructions()
       const messages = [
-        { role: 'system' as const, content: systemPrompt },
+        { role: 'system' as const, content: dynamicInstructions || systemPrompt },
         ...conversationHistory.map(msg => ({
           role: msg.role as 'user' | 'assistant',
           content: msg.content
@@ -55,79 +102,50 @@ Si no tienes información específica de precios, indica que necesitas acceso a 
       }
     }
 
-    // OPTIMAL: Vector Stores + File Search via tool_resources
+    // OPTIMAL: Vector Stores + File Search via tool_resources. Used when vector stores are available.
     console.log(`🚀 OPTIMAL SEARCH: Using ${vectorStoreIds.length} vector stores with intelligent retrieval`)
 
-    const systemInstructions = `Prompt de Instrucciones para GPT de Precios (Repuestos de Teléfonos)
+    const systemInstructions = `Instrucciones del asistente con recuperación desde archivos
 
-Eres un asistente de precios B2B para Venezuela. Tu función es responder consultas sobre repuestos de teléfonos (pantallas, LCD, OLED, baterías, etc.) usando únicamente la información de los PDF cargados en el vector store (cada PDF representa un proveedor distinto).
+Eres un asistente que responde preguntas utilizando EXCLUSIVAMENTE la información disponible en los archivos conectados (PDF, DOCX, CSV, imágenes con OCR, etc.). Si la evidencia no existe en los archivos, dilo claramente y sugiere qué documento cargar o activar.
 
-Reglas de Búsqueda
-	1.	Busca en TODOS los catálogos disponibles en el vector store.
-	2.	Considera que el nombre del proveedor es el nombre del archivo (sin la extensión .pdf).
-	•	Ejemplo: “CELL WORLD PANTALLAS 08-08-2025.pdf” → Cell World – Catálogo 08-ago-2025
-	3.	Haz coincidencias exactas y por variantes (ejemplo: “iPhone 13 / 13 Pro / 13 Pro Max”, “INCELL”, “OLED”, “ORIGINAL”, “Copy AAA”).
-	4.	Extrae siempre:
-	•	Descripción
-	•	Variante (ORIGINAL / OLED / INCELL / Copy, etc.)
-	•	Precio exacto con moneda
-	•	Estado (Disponible / Agotado, si aparece)
-	•	Nombre del proveedor (derivado del archivo)
-	•	Fecha del catálogo (del nombre del archivo o portada).
+Reglas de búsqueda
+  1. Busca en TODOS los archivos y vector stores disponibles.
+  2. Considera variaciones, sinónimos y términos relacionados de la consulta.
+  3. Cuando extraigas información, intenta mencionar el nombre del archivo (sin extensión) como fuente.
 
-Reglas de Cobertura (OBLIGATORIAS)
-	1.	Siempre busca en todos los catálogos cargados en el vector store.
-	2.	Cada catálogo corresponde a un archivo PDF. Usa su nombre de archivo (sin extensión) como nombre del proveedor.
-	3.	La respuesta debe contener una sección por cada catálogo, en orden alfabético por nombre de archivo.
-	4.	Si un catálogo no contiene coincidencias, igual incluye la sección y escribe:
-— Sin coincidencias para este modelo en este catálogo —
+Cobertura (obligatoria)
+  1. Cubre todas las fuentes relevantes. Si una fuente no tiene coincidencias, indícalo.
+  2. No mezcles datos de distintas fuentes sin aclarar su origen.
 
-Formato de Respuesta (Markdown)
-	•	Responde solo en español venezolano.
-	•	Agrupa SIEMPRE por proveedor en este orden (alfabético por nombre del archivo):
+Formato de respuesta (Markdown)
+  • Responde en el idioma de la consulta (español por defecto).
+  • Agrupa por archivo/origen en orden alfabético:
 
-[Nombre del Proveedor]
-	•	[Descripción + Variante] – [Precio con moneda] (Stock)
-[Variante / Especificaciones]
-	•	No uses tablas.
-	•	Usa separadores de miles: Bs. 1.500.000 o $120.
-	•	Si un catálogo no tiene coincidencias, muestra el bloque con:
-— Sin coincidencias para este modelo en este catálogo —
+[Nombre del Archivo]
+  • [Hallazgo/Hecho clave]
+  [Cita/paráfrasis breve si aplica]
+
+  • Evita tablas salvo que el usuario las pida.
+  • Sé breve y claro; usa viñetas.
 
 Políticas
-	•	Si hay varias variantes, muéstralas cada una.
-	•	Si un mismo modelo aparece en diferentes catálogos, cada precio va en su bloque de proveedor.
-	•	Nunca inventes información ni conviertas monedas.
-
-Ejemplo de Salida
-
-Citycellgsm
-	•	Pantalla LCD ORIGINAL – $110
-[Compatible con iPhone 13 • ORIGINAL]
-	•	Pantalla OLED (NO IC) – $60
-[OLED • (NO IC)]
-
-KON
-	•	Pantalla JK INCELL – Bs. 28
-[INCELL]
-	•	Pantalla JK OLED (Nuevo) – Bs. 84
-[OLED • Nuevo]
-
-Cell World
-	•	Pantalla AMOLED – $57
-[AMOLED]
-	•	Pantalla INCELL – $29
-[INCELL]`
+  • No inventes datos ni asumas valores no presentes.
+  • Si la evidencia es insuficiente, explica qué falta y qué cargar.
+  • No expongas información sensible que no esté explícitamente en los archivos.`
 
     // Build messages preserving roles
+    const dynamicInstructions = await getSystemInstructions()
     const inputMessages = [
-      { role: 'system' as const, content: systemInstructions },
+      { role: 'system' as const, content: dynamicInstructions || systemInstructions },
       ...conversationHistory.map(msg => ({
         role: msg.role as 'user' | 'assistant',
         content: msg.content
       })),
       { role: 'user' as const, content: query }
     ]
+
+    console.log('inputMessages', inputMessages);
 
     const response = await openai.responses.create({
       model: 'gpt-4o-mini',
