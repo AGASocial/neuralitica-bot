@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
     if (fileError) {
       console.error('Error fetching active files:', fileError)
       return NextResponse.json(
-        { error: 'Failed to get active price catalogs' },
+        { error: 'Failed to get active files' },
         { status: 500 }
       )
     }
@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
     if (!activeFiles || activeFiles.length === 0) {
       return NextResponse.json({
         success: true,
-        response: 'No hay catálogos de precios activos en este momento. Por favor, contacta al administrador para activar los catálogos necesarios.',
+        response: 'No hay archivos activos en este momento. Por favor, contacta al administrador para activar los archivos necesarios.',
         tokens_used: 0,
         response_time_ms: Date.now() - startTime,
         active_catalogs: 0
@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Get master vector store for querying (no sync - that's handled when files change)
-    console.log(`🚀 MASTER STORE: Querying ${activeFiles.length} active catalogs: ${activeFiles.map(f => f.file_name).join(', ')}`)
+    console.log(`🚀 MASTER STORE: Querying ${activeFiles.length} active files: ${activeFiles.map(f => f.file_name).join(', ')}`)
     
     try {
       // Just get the master vector store - sync only happens when files are added/removed
@@ -92,7 +92,7 @@ export async function POST(request: NextRequest) {
     } catch (error) {
       console.error('Master vector store error:', error)
       return NextResponse.json(
-        { error: 'Failed to access price catalogs' },
+        { error: 'Failed to access files' },
         { status: 500 }
       )
     }
@@ -219,7 +219,7 @@ export async function POST(request: NextRequest) {
     
     return NextResponse.json(
       { 
-        error: 'Error procesando consulta de precios',
+        error: 'Error procesando consulta de archivos',
         details: error.message || 'Unknown error',
         response_time_ms: totalTime,
         performance_target: 'FAILED'
@@ -279,7 +279,7 @@ export async function GET(request: NextRequest) {
     if (error) {
       console.error('Error fetching conversation:', error)
       return NextResponse.json(
-        { error: 'Failed to fetch conversation history' },
+        { error: 'Failed to fetch conversation history of files' },
         { status: 500 }
       )
     }
@@ -310,7 +310,7 @@ export async function GET(request: NextRequest) {
     })
 
   } catch (error: any) {
-    console.error('Get conversation error:', error)
+    console.error('Get conversation error of files:', error)
     return NextResponse.json(
       { error: 'Failed to get conversation history', details: error.message },
       { status: 500 }

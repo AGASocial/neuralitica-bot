@@ -59,7 +59,7 @@ function SignUpForm() {
           <p className="text-slate-600 text-lg">
             Únete a <span className="font-semibold bg-gradient-to-r from-emerald-600 to-green-600 bg-clip-text text-transparent">NeuraliticaBot</span>
           </p>
-          <p className="text-slate-500 text-sm mt-1">Sistema de consulta de precios B2B</p>
+          <p className="text-slate-500 text-sm mt-1">Conversa con tus documentos en segundos</p>
         </div>
         
         <div className="bg-white/80 backdrop-blur-sm rounded-3xl shadow-2xl border border-white/20 p-8">

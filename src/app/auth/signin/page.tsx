@@ -130,7 +130,7 @@ function SignInForm() {
           <p className="text-slate-600 text-lg">
             Accede a <span className="font-semibold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">NeuraliticaBot</span>
           </p>
-          <p className="text-slate-500 text-sm mt-1">Sistema de consulta de precios B2B</p>
+          <p className="text-slate-500 text-sm mt-1">Conversa con tus documentos en segundos</p>
         </div>
         
         {authLoading && !user ? (

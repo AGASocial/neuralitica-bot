@@ -134,7 +134,7 @@ export default function ExpiredPage() {
                   </h3>
                   <div className="mt-2 text-sm text-yellow-700">
                     <p>
-                      Para consultar las listas de precio del NeuraliticaBot activa tu plan de acceso. Contacta al Administrador.
+                      Para consultar los archivos con NeuraliticaBot, activa tu plan de acceso. Contacta al Administrador.
                     </p>
                   </div>
                 </div>

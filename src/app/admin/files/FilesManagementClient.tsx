@@ -247,7 +247,7 @@ export default function FilesManagementClient() {
         fileInputRef.current.value = ''
       }
 
-      alert(`¡Archivo subido exitosamente a OpenAI!\n\nID del archivo: ${openaiResult.openai_file_id}\nTiempo de procesamiento: ${openaiResult.processing_time_ms}ms\n\nEl archivo está listo para ser activado para consultas de precios ultra-rápidas.`)
+      alert(`¡Archivo subido exitosamente a OpenAI!\n\nID del archivo: ${openaiResult.openai_file_id}\nTiempo de procesamiento: ${openaiResult.processing_time_ms}ms\n\nEl archivo está listo para ser activado para consultas ultra-rápidas.`)
     } catch (error: any) {
       console.error('Error uploading file:', error)
       alert(`Error al subir archivo: ${error.message}`)

@@ -15,9 +15,9 @@ export async function GET(request: NextRequest) {
       .order('uploaded_at', { ascending: false })
 
     if (dbError) {
-      console.error('Error fetching price lists:', dbError)
+      console.error('Error fetching file:', dbError)
       return NextResponse.json(
-        { error: 'Failed to fetch price lists from database' },
+        { error: 'Failed to fetch file from database' },
         { status: 500 }
       )
     }
@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({
         success: true,
         vector_stores: [],
-        message: 'No active vector stores found'
+        message: 'No active file from vector stores found'
       })
     }
 

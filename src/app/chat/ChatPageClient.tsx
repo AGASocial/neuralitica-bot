@@ -153,8 +153,8 @@ export default function ChatPageClient() {
               </svg>
             </div>
             <div className="min-w-0 flex-1">
-              <h3 className="text-sm sm:text-lg font-semibold text-slate-800 truncate">Precios</h3>
-              <p className="text-slate-600 text-xs sm:text-sm hidden sm:block">Pregunta sobre precios {conversationId && (
+              <h3 className="text-sm sm:text-lg font-semibold text-slate-800 truncate">Consultas</h3>
+              <p className="text-slate-600 text-xs sm:text-sm hidden sm:block">Pregunta sobre tus archivos {conversationId && (
                 <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-600 border border-slate-200">
                   ID: {conversationId.slice(-8)}
                 </span>
@@ -185,12 +185,12 @@ export default function ChatPageClient() {
                 </svg>
               </div>
               <h4 className="text-base sm:text-lg font-semibold text-slate-700 mb-2">¡Comienza una conversación!</h4>
-              <p className="text-slate-500 text-sm mb-4">Pregunta sobre precios de cualquier producto</p>
+              <p className="text-slate-500 text-sm mb-4">Pregunta sobre tus archivos</p>
               <div className="inline-flex items-center px-3 py-2 bg-blue-50 text-blue-700 text-xs sm:text-sm rounded-lg max-w-full">
                 <svg className="w-3 h-3 sm:w-4 sm:h-4 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
                 </svg>
-                <span className="break-words">Ejemplo: "¿Cuál es el precio de la pantalla iPhone 15?"</span>
+                <span className="break-words">Ejemplo: "¿Cuál es la misión de la empresa?"</span>
               </div>
             </div>
           ) : (
@@ -301,7 +301,7 @@ export default function ChatPageClient() {
                     <div className="animate-bounce w-2 h-2 bg-gradient-to-r from-blue-400 to-indigo-500 rounded-full"></div>
                     <div className="animate-bounce w-2 h-2 bg-gradient-to-r from-blue-400 to-indigo-500 rounded-full" style={{ animationDelay: '0.1s' }}></div>
                     <div className="animate-bounce w-2 h-2 bg-gradient-to-r from-blue-400 to-indigo-500 rounded-full" style={{ animationDelay: '0.2s' }}></div>
-                    <span className="text-slate-500 text-sm ml-2">Buscando precios...</span>
+                    <span className="text-slate-500 text-sm ml-2">Buscando información de los archivos...</span>
                   </div>
                 </div>
               </div>
@@ -320,7 +320,7 @@ export default function ChatPageClient() {
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}
               onKeyPress={handleKeyPress}
-              placeholder="Pregunta sobre precios..."
+              placeholder="Pregunta sobre información de los archivos..."
               disabled={loading}
               className="w-full px-3 sm:px-4 py-2 sm:py-3 bg-white border border-slate-300 text-slate-800 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none placeholder:text-slate-500 shadow-sm transition-all duration-200 text-sm sm:text-base"
               rows={2}
@@ -335,7 +335,7 @@ export default function ChatPageClient() {
                 <kbd className="px-1 sm:px-2 py-0.5 sm:py-1 bg-slate-200 text-slate-600 rounded text-xs font-mono mr-1 hidden sm:inline">Enter</kbd>
                 <span className="hidden sm:inline">para nueva línea</span>
               </span>
-              <span className="text-slate-400 hidden sm:inline">Optimizado para consultas B2B venezolanas</span>
+              <span className="text-slate-400 hidden sm:inline">Optimizado para consultas de archivos</span>
             </div>
           </div>
           <button

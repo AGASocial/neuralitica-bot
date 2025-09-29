@@ -9,8 +9,8 @@ export default async function ChatPage() {
 
   return (
     <AppLayout 
-      title="Consulta de Precios NeuraliticaBot" 
-      subtitle="Consultas de precios B2B ultra-rápidas para el mercado venezolano"
+      title="Consulta de Archivos NeuraliticaBot" 
+      subtitle="Consultas de archivos B2B ultra-rápidas para el mercado venezolano"
       profile={profile}
       showBackButton={profile?.role === 'ADMIN'}
     >

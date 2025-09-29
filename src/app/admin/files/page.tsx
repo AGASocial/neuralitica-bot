@@ -10,7 +10,7 @@ export default async function FilesManagement() {
   return (
     <AppLayout 
       title="Gestión de Archivos" 
-      subtitle="Administrar catálogos de precios PDF"
+      subtitle="Administrar catálogos de archivos PDF"
       showBackButton={true}
       backHref="/admin"
       profile={profile}

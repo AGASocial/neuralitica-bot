@@ -150,7 +150,7 @@ export default function AdminDashboardClient() {
       {/* Navigation Cards */}
       <div className="grid grid-cols-1 md:grid-cols-1 lg:grid-cols-2 xl:grid-cols-2 gap-8">
 
-        {/* Gestión de Precios */}
+        {/* Gestión de Archivos */}
         <a
           href="/chat"
           className="group bg-white/80 backdrop-blur-sm p-8 rounded-3xl shadow-2xl border border-white/20 hover:shadow-3xl hover:scale-105 transition-all duration-300"
@@ -163,13 +163,13 @@ export default function AdminDashboardClient() {
             </div>
             <div className="flex-1">
               <h3 className="text-xl font-bold text-slate-800 mb-2 group-hover:text-indigo-700 transition-colors">
-                Consulta de Precios
+                Consulta de Archivos
               </h3>
               <p className="text-slate-600 leading-relaxed">
-                Accede al chat inteligente para consultar precios y productos de los catálogos activos del sistema.
+                Accede al chat inteligente para consultar archivos y productos de los archivos activos del sistema.
               </p>
               <div className="mt-4 inline-flex items-center text-indigo-600 text-sm font-medium group-hover:text-indigo-700">
-                Consultar precios
+                Consultar archivos
                 <svg className="w-4 h-4 ml-2 group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                 </svg>

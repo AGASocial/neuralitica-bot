@@ -208,6 +208,6 @@ Políticas
   } catch (error) {
     const processingTime = Date.now() - startTime
     console.error(`❌ Optimal search failed after ${processingTime}ms:`, error)
-    throw new Error(`Error en consulta de precios: ${error instanceof Error ? error.message : 'Error desconocido'}`)
+    throw new Error(`Error en consulta de archivos: ${error instanceof Error ? error.message : 'Error desconocido'}`)
   }
 }

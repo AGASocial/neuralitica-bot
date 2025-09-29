@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "NeuraliticaBot - Sistema de consulta de precios",
-  description: "Consulta de precios de repuestos electrónicos en Venezuela",
+  title: "NeuraliticaBot - Conversa con tus documentos en segundos",
+  description: "Conversa con tus documentos en segundos",
 };
 
 export default function RootLayout({
