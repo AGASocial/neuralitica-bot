@@ -12,12 +12,15 @@ interface ChatMessage {
   tokens_used?: number
 }
 
+const STORAGE_KEY = 'neuralitica_chat_conversation_id'
+
 export default function ChatPageClient() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [inputMessage, setInputMessage] = useState('')
   const [loading, setLoading] = useState(false)
   const [lastResponseTime, setLastResponseTime] = useState<number | null>(null)
   const [conversationId, setConversationId] = useState<string | null>(null)
+  const [isRestoring, setIsRestoring] = useState(true)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -37,9 +40,57 @@ export default function ChatPageClient() {
     scrollToBottom()
   }, [messages, loading])
 
+  // Restore conversation from localStorage on mount
   useEffect(() => {
-    // Focus on initial load
-    focusTextarea()
+    const restoreConversation = async () => {
+      try {
+        const savedConversationId = localStorage.getItem(STORAGE_KEY)
+        if (savedConversationId) {
+          console.log('🔄 Restoring conversation:', savedConversationId.slice(-8))
+          setConversationId(savedConversationId)
+          
+          // Fetch conversation history
+          const response = await fetch(`/api/chat?conversationId=${savedConversationId}`)
+          if (response.ok) {
+            const data = await response.json()
+            if (data.success) {
+              // conversationId is already set above, now restore messages if any
+              if (data.messages && data.messages.length > 0) {
+                // Transform API messages to ChatMessage format
+                const restoredMessages: ChatMessage[] = data.messages.map((msg: any) => ({
+                  role: msg.role,
+                  content: msg.content,
+                  timestamp: new Date(msg.timestamp),
+                  response_time_ms: msg.response_time_ms,
+                  tokens_used: msg.tokens_used
+                }))
+                setMessages(restoredMessages)
+                console.log('✅ Restored', restoredMessages.length, 'messages')
+              } else {
+                console.log('✅ Conversation restored (no messages yet)')
+              }
+            } else {
+              console.log('⚠️ Could not restore conversation, starting fresh')
+              localStorage.removeItem(STORAGE_KEY)
+              setConversationId(null)
+            }
+          } else {
+            console.log('⚠️ Could not restore conversation, starting fresh')
+            localStorage.removeItem(STORAGE_KEY)
+            setConversationId(null)
+          }
+        }
+      } catch (error) {
+        console.error('Error restoring conversation:', error)
+        localStorage.removeItem(STORAGE_KEY)
+        setConversationId(null)
+      } finally {
+        setIsRestoring(false)
+        focusTextarea()
+      }
+    }
+
+    restoreConversation()
   }, [])
 
   useEffect(() => {
@@ -48,6 +99,13 @@ export default function ChatPageClient() {
       focusTextarea()
     }
   }, [loading])
+
+  // Persist conversationId to localStorage whenever it changes
+  useEffect(() => {
+    if (conversationId) {
+      localStorage.setItem(STORAGE_KEY, conversationId)
+    }
+  }, [conversationId])
 
   const sendMessage = async () => {
     if (!inputMessage.trim() || loading) return
@@ -100,7 +158,8 @@ export default function ChatPageClient() {
       setLastResponseTime(result.response_time_ms)
 
       // Store conversation ID if returned from API (for new conversations)
-      if (result.conversationId && !conversationId) {
+      // The useEffect hook will automatically persist it to localStorage
+      if (result.conversationId) {
         setConversationId(result.conversationId)
       }
 
@@ -131,6 +190,8 @@ export default function ChatPageClient() {
     setConversationId(null)
     setMessages([])
     setLastResponseTime(null)
+    // Clear persisted conversation
+    localStorage.removeItem(STORAGE_KEY)
     focusTextarea()
   }
 
@@ -177,7 +238,17 @@ export default function ChatPageClient() {
       {/* Messages Area - Scrollable with constrained height */}
       <div className="flex-1 overflow-y-auto bg-gradient-to-b from-white/50 to-slate-50/50 min-h-0">
         <div className="p-3 sm:p-6 space-y-4 sm:space-y-6">
-          {messages.length === 0 ? (
+          {isRestoring ? (
+            <div className="text-center py-8 sm:py-16 px-4">
+              <div className="w-12 h-12 sm:w-16 sm:h-16 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-full flex items-center justify-center mx-auto mb-3 sm:mb-4">
+                <svg className="animate-spin w-6 h-6 sm:w-8 sm:h-8 text-blue-500" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+              </div>
+              <h4 className="text-base sm:text-lg font-semibold text-slate-700 mb-2">Restaurando conversación...</h4>
+            </div>
+          ) : messages.length === 0 ? (
             <div className="text-center py-8 sm:py-16 px-4">
               <div className="w-12 h-12 sm:w-16 sm:h-16 bg-gradient-to-br from-blue-100 to-indigo-100 rounded-full flex items-center justify-center mx-auto mb-3 sm:mb-4">
                 <svg className="w-6 h-6 sm:w-8 sm:h-8 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -285,10 +285,13 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Format for frontend
-    const formattedMessages: ChatMessage[] = messages.map(msg => ({
+    // Format for frontend with all message data
+    const formattedMessages = messages.map(msg => ({
       role: msg.role as 'user' | 'assistant',
-      content: msg.content
+      content: msg.content,
+      timestamp: msg.created_at,
+      response_time_ms: msg.response_time_ms || undefined,
+      tokens_used: msg.tokens_used || undefined
     }))
 
     // Calculate performance metrics
