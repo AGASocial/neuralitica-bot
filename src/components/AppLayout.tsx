@@ -232,111 +232,140 @@ export default function AppLayout({
                 </button>
 
                 {dropdownOpen && (
-                  <div className="absolute right-0 mt-2 w-56 bg-white/95 backdrop-blur-sm rounded-xl shadow-xl border border-slate-200/80 py-2 z-[9999]">
-                    {/* User info */}
-                    <div className="px-4 py-3 border-b border-slate-100">
-                      <p className="text-sm font-medium text-slate-900">
+                  <div className="absolute right-0 mt-2 w-64 bg-white/95 backdrop-blur-sm rounded-xl shadow-xl border border-slate-200/80 z-[9999]">
+                    {/* User info - Compact */}
+                    <div className="px-4 py-2.5 border-b border-slate-100">
+                      <p className="text-sm font-semibold text-slate-900 truncate">
                         {profile?.full_name || 'Usuario'}
                       </p>
-                      <p className="text-sm text-slate-500">{profile?.email}</p>
-                      {/* {userRole && (
-                        <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium mt-1 ${userRole === 'ADMIN'
-                          ? 'bg-purple-100 text-purple-800'
-                          : 'bg-blue-100 text-blue-800'
-                          }`}>
-                          {userRole}
-                        </span>
-                      )} */}
+                      <p className="text-xs text-slate-500 truncate">{profile?.email}</p>
                     </div>
 
-                    {/* Navigation items */}
-                    <div className="py-1">
-
+                    {/* Main Navigation */}
+                    <div className="py-1.5">
                       <button
                         onClick={handleChat}
-                        className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-blue-50 hover:text-blue-700 transition-colors duration-200 flex items-center"
+                        className={`w-full px-4 py-2.5 text-left text-sm transition-colors duration-200 flex items-center ${
+                          pathname.startsWith('/chat')
+                            ? 'bg-blue-50 text-blue-700'
+                            : 'text-slate-700 hover:bg-slate-50'
+                        }`}
                       >
-                        <svg className="w-4 h-4 mr-3 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-4 h-4 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                         </svg>
-                        Consulta de Archivos
+                        <span>Consulta de Archivos</span>
                       </button>
-
-                      {userRole === 'ADMIN' && (
-                        <>
-                          <button
-                            onClick={handleDashboard}
-                            className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-purple-50 hover:text-purple-700 transition-colors duration-200 flex items-center"
-                          >
-                            <svg className="w-4 h-4 mr-3 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                            </svg>
-                            Panel de Control
-                          </button>
-
-
-                          <button
-                            onClick={() => { router.push('/admin/files'); setDropdownOpen(false); }}
-                            className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-amber-50 hover:text-amber-700 transition-colors duration-200 flex items-center"
-                          >
-                            <svg className="w-4 h-4 mr-3 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                            </svg>
-                            Gestión de Archivos
-                          </button>
-                          <button
-                            onClick={() => { router.push('/admin/users'); setDropdownOpen(false); }}
-                            className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-cyan-50 hover:text-cyan-700 transition-colors duration-200 flex items-center"
-                          >
-                            <svg className="w-4 h-4 mr-3 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
-                            </svg>
-                            Gestión de Usuarios
-                          </button>
-                          <button
-                            onClick={() => { router.push('/admin/messages'); setDropdownOpen(false); }}
-                            className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-green-50 hover:text-green-700 transition-colors duration-200 flex items-center"
-                          >
-                            <svg className="w-4 h-4 mr-3 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-                            </svg>
-                            Gestión de Mensajes
-                          </button>
-                          <button
-                            onClick={() => { router.push('/admin/settings'); setDropdownOpen(false); }}
-                            className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-green-50 hover:text-green-700 transition-colors duration-200 flex items-center"
-                          >
-                            <svg className="w-4 h-4 mr-3 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
-                            </svg>
-                            Configuración
-                          </button>
-                        </>
-                      )}
-
-
 
                       <button
                         onClick={handleProfile}
-                        className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-slate-50 hover:text-slate-900 transition-colors duration-200 flex items-center"
+                        className={`w-full px-4 py-2.5 text-left text-sm transition-colors duration-200 flex items-center ${
+                          pathname.startsWith('/profile')
+                            ? 'bg-slate-100 text-slate-900'
+                            : 'text-slate-700 hover:bg-slate-50'
+                        }`}
                       >
-                        <svg className="w-4 h-4 mr-3 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-4 h-4 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                         </svg>
-                        Perfil
+                        <span>Perfil</span>
                       </button>
                     </div>
 
+                    {/* Admin Section */}
+                    {userRole === 'ADMIN' && (
+                      <>
+                        <div className="border-t border-slate-100 my-1"></div>
+                        <div className="px-4 py-1.5">
+                          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1">
+                            Administración
+                          </p>
+                        </div>
+                        <div className="py-1.5 space-y-0.5">
+                          <button
+                            onClick={handleDashboard}
+                            className={`w-full px-4 py-2.5 text-left text-sm transition-colors duration-200 flex items-center ${
+                              pathname.startsWith('/admin') && pathname === '/admin'
+                                ? 'bg-purple-50 text-purple-700'
+                                : 'text-slate-700 hover:bg-slate-50'
+                            }`}
+                          >
+                            <svg className="w-4 h-4 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                            </svg>
+                            <span>Panel de Control</span>
+                          </button>
+
+                          <button
+                            onClick={() => { router.push('/admin/files'); setDropdownOpen(false); }}
+                            className={`w-full px-4 py-2.5 text-left text-sm transition-colors duration-200 flex items-center ${
+                              pathname.startsWith('/admin/files')
+                                ? 'bg-amber-50 text-amber-700'
+                                : 'text-slate-700 hover:bg-slate-50'
+                            }`}
+                          >
+                            <svg className="w-4 h-4 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                            </svg>
+                            <span>Archivos</span>
+                          </button>
+
+                          <button
+                            onClick={() => { router.push('/admin/users'); setDropdownOpen(false); }}
+                            className={`w-full px-4 py-2.5 text-left text-sm transition-colors duration-200 flex items-center ${
+                              pathname.startsWith('/admin/users')
+                                ? 'bg-cyan-50 text-cyan-700'
+                                : 'text-slate-700 hover:bg-slate-50'
+                            }`}
+                          >
+                            <svg className="w-4 h-4 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z" />
+                            </svg>
+                            <span>Usuarios</span>
+                          </button>
+
+                          <button
+                            onClick={() => { router.push('/admin/messages'); setDropdownOpen(false); }}
+                            className={`w-full px-4 py-2.5 text-left text-sm transition-colors duration-200 flex items-center ${
+                              pathname.startsWith('/admin/messages')
+                                ? 'bg-green-50 text-green-700'
+                                : 'text-slate-700 hover:bg-slate-50'
+                            }`}
+                          >
+                            <svg className="w-4 h-4 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+                            </svg>
+                            <span>Mensajes</span>
+                          </button>
+
+                          <button
+                            onClick={() => { router.push('/admin/settings'); setDropdownOpen(false); }}
+                            className={`w-full px-4 py-2.5 text-left text-sm transition-colors duration-200 flex items-center ${
+                              pathname.startsWith('/admin/settings')
+                                ? 'bg-slate-100 text-slate-900'
+                                : 'text-slate-700 hover:bg-slate-50'
+                            }`}
+                          >
+                            <svg className="w-4 h-4 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            </svg>
+                            <span>Configuración</span>
+                          </button>
+                        </div>
+                      </>
+                    )}
+
                     {/* Logout */}
-                    <div className="border-t border-slate-100 py-1">
+                    <div className="border-t border-slate-100 mt-1.5">
                       <button
                         onClick={handleLogout}
-                        className="w-full px-4 py-2 text-left text-sm text-slate-700 hover:bg-red-50 hover:text-red-700 transition-colors duration-200 flex items-center"
+                        className="w-full px-4 py-2.5 text-left text-sm text-slate-700 hover:bg-red-50 hover:text-red-700 transition-colors duration-200 flex items-center"
                       >
-                        <svg className="w-4 h-4 mr-3 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <svg className="w-4 h-4 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                         </svg>
-                        Cerrar Sesión
+                        <span>Cerrar Sesión</span>
                       </button>
                     </div>
                   </div>
