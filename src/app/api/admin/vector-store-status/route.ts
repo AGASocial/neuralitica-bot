@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
     const vectorStoreStatuses = await Promise.allSettled(
       priceLists.map(async (priceList) => {
         try {
-          // Get vector store status
+          // Get vector store status (legacy individual store)
           const vectorStore = await openai.vectorStores.retrieve(priceList.openai_vector_file_id!)
           
           // Get files in the vector store to get detailed file information
@@ -80,6 +80,24 @@ export async function GET(request: NextRequest) {
             .filter(result => result.status === 'fulfilled')
             .map(result => (result as PromiseFulfilledResult<any>).value)
 
+          // Only check OpenAI file status if vector store is empty or we need to determine readiness
+          // This optimizes API calls - we only check when the individual store doesn't have files
+          let openaiFileStatus = 'unknown'
+          let openaiFileReady = false
+          const counts = vectorStore.file_counts || { total: 0, completed: 0, failed: 0, in_progress: 0 }
+          const needsFileStatusCheck = (counts.total === 0 || counts.completed === 0) && priceList.is_active
+          
+          if (needsFileStatusCheck && priceList.openai_file_id) {
+            try {
+              const openaiFile = await openai.files.retrieve(priceList.openai_file_id)
+              openaiFileStatus = openaiFile.status || 'unknown'
+              // File is ready when status is "processed" (ready to use in vector stores)
+              openaiFileReady = openaiFile.status === 'processed'
+            } catch (fileError) {
+              console.warn(`Failed to get OpenAI file status for ${priceList.openai_file_id}:`, fileError)
+            }
+          }
+
           return {
             database_info: {
               price_list_id: priceList.id,
@@ -98,7 +116,9 @@ export async function GET(request: NextRequest) {
               usage_bytes: vectorStore.usage_bytes || 0
             },
             files: resolvedFileDetails,
-            health_status: determineHealthStatus(vectorStore, resolvedFileDetails)
+            openai_file_status: openaiFileStatus,
+            openai_file_ready: openaiFileReady,
+            health_status: determineHealthStatus(vectorStore, resolvedFileDetails, openaiFileReady, priceList.is_active)
           }
         } catch (error: any) {
           console.error(`Error checking vector store ${priceList.openai_vector_file_id}:`, error)
@@ -188,8 +208,20 @@ export async function GET(request: NextRequest) {
 
 /**
  * Determine the health status of a vector store based on its status and file states
+ * Priority: OpenAI file status > Vector store status > File counts
  */
-function determineHealthStatus(vectorStore: any, files: any[]): 'healthy' | 'partially_healthy' | 'unhealthy' {
+function determineHealthStatus(
+  vectorStore: any, 
+  files: any[], 
+  openaiFileReady: boolean = false,
+  isActive: boolean = false
+): 'healthy' | 'partially_healthy' | 'unhealthy' {
+  // If file is active and OpenAI file is ready, it's usable (Master Vector Store approach)
+  // The individual vector store is legacy - what matters is if the file is ready in OpenAI
+  if (isActive && openaiFileReady) {
+    return 'healthy' // File is ready to use in Master Vector Store
+  }
+
   // If vector store itself has issues
   if (vectorStore.status === 'failed' || vectorStore.status === 'expired') {
     return 'unhealthy'
@@ -197,9 +229,11 @@ function determineHealthStatus(vectorStore: any, files: any[]): 'healthy' | 'par
 
   // If still processing
   if (vectorStore.status === 'in_progress') {
-    // Check if any files are completed
-    const hasCompletedFiles = files.some(file => file.status === 'completed')
-    return hasCompletedFiles ? 'partially_healthy' : 'unhealthy'
+    // If OpenAI file is ready, it's still usable even if individual store is processing
+    if (openaiFileReady && isActive) {
+      return 'healthy'
+    }
+    return 'partially_healthy'
   }
 
   // If vector store is completed, check file statuses
@@ -211,23 +245,53 @@ function determineHealthStatus(vectorStore: any, files: any[]): 'healthy' | 'par
 
     if (totalFiles > 0) {
       if (completedFiles === totalFiles) {
-        return 'healthy' // All files completed
+        return 'healthy' // All files completed and ready to use
       }
       if (completedFiles > 0 && failedFiles < totalFiles) {
-        return 'partially_healthy' // Some files completed
+        return 'partially_healthy' // Some files completed, still processing others
       }
       return 'unhealthy' // Most or all files failed
     }
 
     // Fallback to vector store aggregates when file list is empty
     const counts = vectorStore.file_counts || { total: 0, completed: 0, failed: 0, in_progress: 0 }
-    if (counts.total > 0 && counts.completed === counts.total) {
-      return 'healthy'
-    } else if (counts.completed > 0 && counts.completed < counts.total) {
-      return 'partially_healthy'
-    } else {
-      return 'unhealthy'
+    
+    // If OpenAI file is ready and active, it's usable regardless of individual store counts
+    if (openaiFileReady && isActive) {
+      return 'healthy' // File is in Master Vector Store and ready
     }
+    
+    // Only mark as healthy if there are completed files ready to use
+    if (counts.total > 0 && counts.completed === counts.total && counts.completed > 0) {
+      return 'healthy' // Has files and all are completed - ready to use
+    }
+    
+    // If still processing files
+    if (counts.in_progress > 0) {
+      return 'partially_healthy'
+    }
+    
+    // If no files processed yet (total === 0 or completed === 0), check OpenAI file status
+    if (counts.total === 0 || counts.completed === 0) {
+      // If OpenAI file is ready, it's still usable
+      if (openaiFileReady && isActive) {
+        return 'healthy'
+      }
+      return 'partially_healthy' // Still processing, not ready yet
+    }
+    
+    // Some files completed but not all
+    if (counts.completed > 0 && counts.completed < counts.total) {
+      return 'partially_healthy'
+    }
+    
+    // All files failed
+    return 'unhealthy'
+  }
+
+  // If OpenAI file is ready and active, it's usable even with unknown vector store status
+  if (openaiFileReady && isActive) {
+    return 'healthy'
   }
 
   return 'unhealthy' // Unknown status

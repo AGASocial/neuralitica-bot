@@ -29,14 +29,24 @@ interface VectorStoreStatusBadgeProps {
   priceListId: string
   vectorStatus: Record<string, VectorStoreStatus>
   statusLoading: boolean
+  isActive?: boolean
 }
 
-function VectorStoreStatusBadge({ priceListId, vectorStatus, statusLoading }: VectorStoreStatusBadgeProps) {
+function VectorStoreStatusBadge({ priceListId, vectorStatus, statusLoading, isActive = true }: VectorStoreStatusBadgeProps) {
   if (statusLoading) {
     return (
       <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">
         <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-gray-600 mr-1"></div>
         Verificando...
+      </span>
+    )
+  }
+
+  // If file is inactive, show inactive status (inactive files don't appear in vector-store-status response)
+  if (!isActive) {
+    return (
+      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">
+        ⚫ Inactivo
       </span>
     )
   }
@@ -61,6 +71,15 @@ function VectorStoreStatusBadge({ priceListId, vectorStatus, statusLoading }: Ve
     }
     
     if (status.health_status === 'partially_healthy') {
+      // If no files processed yet, show "Inicializando" instead of "Procesando (0/0)"
+      if (status.file_counts.total === 0 || (status.file_counts.completed === 0 && status.file_counts.in_progress === 0)) {
+        return {
+          bg: 'bg-yellow-100 text-yellow-800',
+          icon: '⚡',
+          text: 'Inicializando...',
+          shortText: 'Init'
+        }
+      }
       return {
         bg: 'bg-yellow-100 text-yellow-800',
         icon: '⚡',
@@ -207,50 +226,68 @@ export default function FilesManagementClient() {
   }
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (!file) return
+    const selectedFiles = event.target.files
+    if (!selectedFiles || selectedFiles.length === 0) return
 
-    if (file.type !== 'application/pdf') {
-      alert('Por favor selecciona un archivo PDF')
+    const filesArray = Array.from(selectedFiles)
+    const pdfFiles = filesArray.filter(f => f.type === 'application/pdf')
+    const skipped = filesArray.length - pdfFiles.length
+
+    if (pdfFiles.length === 0) {
+      alert('Por favor selecciona archivos PDF')
       return
     }
 
     setUploading(true)
 
+    let successCount = 0
+    const errors: string[] = []
+
     try {
-      // Upload directly to OpenAI Files API (MVP approach)
-      console.log('Uploading PDF directly to OpenAI for ultra-fast processing...')
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('supplier_name', '') // Can be enhanced with supplier input
-      // User ID will be extracted from session on server-side
+      console.log(`Uploading ${pdfFiles.length} PDF(s) directly to OpenAI for ultra-fast processing...`)
+      
+      for (const file of pdfFiles) {
+        const formData = new FormData()
+        formData.append('file', file)
+        formData.append('supplier_name', '') // Can be enhanced with supplier input
 
-      const openaiResponse = await fetch('/api/openai/upload-pdf', {
-        method: 'POST',
-        body: formData,
-      })
+        const response = await fetch('/api/openai/upload-pdf', {
+          method: 'POST',
+          body: formData,
+        })
 
-      if (!openaiResponse.ok) {
-        const errorData = await openaiResponse.json()
-        throw new Error(`OpenAI upload failed: ${errorData.error}`)
+        if (!response.ok) {
+          let errorMsg = 'Unknown error'
+          try {
+            const errorData = await response.json()
+            errorMsg = errorData.error || errorData.details || errorMsg
+          } catch (_) {}
+          errors.push(`${file.name}: ${errorMsg}`)
+          continue
+        }
+
+        const result = await response.json()
+        console.log(`OpenAI upload for ${file.name} completed in ${result.processing_time_ms}ms`)
+        successCount += 1
       }
 
-      const openaiResult = await openaiResponse.json()
-      console.log(`OpenAI upload completed in ${openaiResult.processing_time_ms}ms`)
-
-      // Refresh files list and restart polling for new upload
+      // Refresh files list and restart polling once after all uploads
       await fetchFiles()
-      await fetchVectorStoreStatus() // This will restart polling if needed
-      
+      await fetchVectorStoreStatus()
+
       // Clear file input
       if (fileInputRef.current) {
         fileInputRef.current.value = ''
       }
 
-      alert(`¡Archivo subido exitosamente a OpenAI!\n\nID del archivo: ${openaiResult.openai_file_id}\nTiempo de procesamiento: ${openaiResult.processing_time_ms}ms\n\nEl archivo está listo para ser activado para consultas ultra-rápidas.`)
+      const parts: string[] = []
+      if (successCount > 0) parts.push(`¡${successCount} archivo(s) subido(s) exitosamente a OpenAI!`)
+      if (skipped > 0) parts.push(`${skipped} archivo(s) no eran PDF y fueron ignorados.`)
+      if (errors.length > 0) parts.push(`Errores:\n- ${errors.join('\n- ')}`)
+      alert(parts.join('\n\n'))
     } catch (error: any) {
-      console.error('Error uploading file:', error)
-      alert(`Error al subir archivo: ${error.message}`)
+      console.error('Error uploading files:', error)
+      alert(`Error al subir archivos: ${error.message}`)
     } finally {
       setUploading(false)
     }
@@ -272,12 +309,36 @@ export default function FilesManagementClient() {
         }),
       })
 
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(`Vector store management failed: ${errorData.error}`)
+      // Try to parse JSON; gracefully handle HTML/redirect responses
+      let result: any = null
+      let rawText = ''
+      try {
+        result = await response.clone().json()
+      } catch (e) {
+        try {
+          rawText = await response.text()
+        } catch (_) {
+          rawText = ''
+        }
       }
 
-      const result = await response.json()
+      // If not OK but server still returned success=true, continue as success
+      if (!response.ok && !(result && result.success)) {
+        const errorMsg =
+          (result && (result.error || result.details)) ||
+          (rawText && (rawText.includes('<!DOCTYPE html') || rawText.includes('<html') ? 'Respuesta HTML recibida (posible redirección o sesión expirada)' : rawText)) ||
+          `HTTP ${response.status}`
+        throw new Error(`Vector store management failed: ${errorMsg}`)
+      }
+
+      // Ensure we have a result object
+      if (!result) {
+        try {
+          result = await response.json()
+        } catch {
+          result = {}
+        }
+      }
       console.log(`File status toggled in ${result.processing_time_ms}ms`)
 
       // Update local state
@@ -412,6 +473,7 @@ export default function FilesManagementClient() {
             ref={fileInputRef}
             type="file"
             accept=".pdf"
+            multiple
             onChange={handleFileUpload}
             disabled={uploading}
             className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
@@ -498,6 +560,7 @@ export default function FilesManagementClient() {
                             priceListId={file.id}
                             vectorStatus={vectorStatus}
                             statusLoading={statusLoading}
+                            isActive={file.is_active}
                           />
                         )}
                       </div>
