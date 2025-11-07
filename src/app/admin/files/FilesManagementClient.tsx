@@ -133,7 +133,9 @@ export default function FilesManagementClient() {
   const [vectorStatus, setVectorStatus] = useState<Record<string, VectorStoreStatus>>({})
   const [statusLoading, setStatusLoading] = useState(false)
   const [syncing, setSyncing] = useState(false)
+  const [isDragging, setIsDragging] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const dropZoneRef = useRef<HTMLDivElement>(null)
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
 
   // Helper function to check if any files are still processing
@@ -225,11 +227,9 @@ export default function FilesManagementClient() {
     }
   }
 
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFiles = event.target.files
-    if (!selectedFiles || selectedFiles.length === 0) return
-
-    const filesArray = Array.from(selectedFiles)
+  // Process files (used by both input and drag & drop)
+  const processFiles = async (fileList: FileList | File[]) => {
+    const filesArray = Array.from(fileList)
     const pdfFiles = filesArray.filter(f => f.type === 'application/pdf')
     const skipped = filesArray.length - pdfFiles.length
 
@@ -290,6 +290,49 @@ export default function FilesManagementClient() {
       alert(`Error al subir archivos: ${error.message}`)
     } finally {
       setUploading(false)
+    }
+  }
+
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFiles = event.target.files
+    if (!selectedFiles || selectedFiles.length === 0) return
+    await processFiles(selectedFiles)
+  }
+
+  // Drag and drop handlers
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(true)
+  }
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    // Only set dragging to false if we're actually leaving the drop zone
+    // Check if the relatedTarget is outside the drop zone
+    const relatedTarget = e.relatedTarget as Node | null
+    if (
+      dropZoneRef.current &&
+      (!relatedTarget || !dropZoneRef.current.contains(relatedTarget))
+    ) {
+      setIsDragging(false)
+    }
+  }
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+  }
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setIsDragging(false)
+
+    const droppedFiles = e.dataTransfer.files
+    if (droppedFiles && droppedFiles.length > 0) {
+      await processFiles(droppedFiles)
     }
   }
 
@@ -468,7 +511,18 @@ export default function FilesManagementClient() {
       {/* Upload Section */}
       <div className="bg-white p-6 rounded-lg shadow mb-8">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Subir PDF</h2>
-        <div className="flex items-center space-x-4">
+        <div
+          ref={dropZoneRef}
+          onDragEnter={handleDragEnter}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+          className={`relative border-2 border-dashed rounded-lg p-8 transition-all duration-200 h-[240px] flex items-center justify-center ${
+            isDragging
+              ? 'border-blue-500 bg-blue-50 scale-[1.02]'
+              : 'border-gray-300 bg-gray-50 hover:border-gray-400 hover:bg-gray-100'
+          } ${uploading ? 'opacity-50 pointer-events-none' : 'cursor-pointer'}`}
+        >
           <input
             ref={fileInputRef}
             type="file"
@@ -476,11 +530,62 @@ export default function FilesManagementClient() {
             multiple
             onChange={handleFileUpload}
             disabled={uploading}
-            className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
           />
-          {uploading && (
-            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
-          )}
+          <div className="flex flex-col items-center justify-center text-center w-full h-full">
+            {uploading ? (
+              <>
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mb-4"></div>
+                <p className="text-sm font-medium text-gray-700">Subiendo archivos...</p>
+              </>
+            ) : isDragging ? (
+              <>
+                <svg
+                  className="w-16 h-16 text-blue-500 mb-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+                  />
+                </svg>
+                <p className="text-lg font-semibold text-blue-600 mb-2">Suelta los archivos aquí</p>
+                <p className="text-sm text-gray-600">Suelta los archivos PDF para subirlos</p>
+              </>
+            ) : (
+              <>
+                <svg
+                  className="w-16 h-16 text-gray-400 mb-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+                  />
+                </svg>
+                <p className="text-lg font-semibold text-gray-700 mb-2">
+                  Arrastra y suelta archivos PDF aquí
+                </p>
+                <p className="text-sm text-gray-500 mb-4">o</p>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  Seleccionar archivos
+                </button>
+                <p className="text-xs text-gray-400 mt-4">Solo archivos PDF</p>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
