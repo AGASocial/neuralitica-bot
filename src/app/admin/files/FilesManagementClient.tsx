@@ -138,6 +138,7 @@ export default function FilesManagementClient() {
   const [statusLoading, setStatusLoading] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
+  const [togglingFiles, setTogglingFiles] = useState<Set<string>>(new Set())
   const fileInputRef = useRef<HTMLInputElement>(null)
   const dropZoneRef = useRef<HTMLDivElement>(null)
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
@@ -201,7 +202,6 @@ export default function FilesManagementClient() {
 
   const fetchVectorStoreStatus = async () => {
     try {
-      setStatusLoading(true)
       const response = await fetch(`/api/admin/vector-store-status?ts=${Date.now()}`, { cache: 'no-store' })
       
       if (!response.ok) {
@@ -346,6 +346,9 @@ export default function FilesManagementClient() {
   }
 
   const toggleFileStatus = async (id: string, currentStatus: boolean) => {
+    // Set loading state immediately when user clicks
+    setTogglingFiles(prev => new Set(prev).add(id))
+    
     try {
       console.log(`${currentStatus ? 'Deactivating' : 'Activating'} file with vector store management...`)
       
@@ -409,6 +412,13 @@ export default function FilesManagementClient() {
     } catch (error: any) {
       console.error('Error toggling file status:', error)
       showError(`Error al actualizar archivo: ${error.message}`)
+    } finally {
+      // Remove loading state when done
+      setTogglingFiles(prev => {
+        const next = new Set(prev)
+        next.delete(id)
+        return next
+      })
     }
   }
 
@@ -693,15 +703,26 @@ export default function FilesManagementClient() {
                   <div className="flex flex-wrap items-center gap-2 sm:space-x-2 sm:flex-nowrap">
                     <button
                       onClick={() => toggleFileStatus(file.id, file.is_active)}
-                      className={`inline-flex items-center px-2 sm:px-3 py-1 rounded-full text-xs font-medium flex-shrink-0 ${
+                      disabled={togglingFiles.has(file.id)}
+                      className={`inline-flex items-center px-2 sm:px-3 py-1 rounded-full text-xs font-medium flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed ${
                         file.is_active
                           ? 'bg-green-100 text-green-800 hover:bg-green-200'
                           : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
                       }`}
                     >
-                      <span className="mr-1">{file.is_active ? '🟢' : '⚫'}</span>
-                      <span className="hidden sm:inline">{file.is_active ? 'Activo' : 'Inactivo'}</span>
-                      <span className="sm:hidden">{file.is_active ? 'On' : 'Off'}</span>
+                      {togglingFiles.has(file.id) ? (
+                        <>
+                          <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-current mr-1"></div>
+                          <span className="hidden sm:inline">Procesando...</span>
+                          <span className="sm:hidden">...</span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="mr-1">{file.is_active ? '🟢' : '⚫'}</span>
+                          <span className="hidden sm:inline">{file.is_active ? 'Activo' : 'Inactivo'}</span>
+                          <span className="sm:hidden">{file.is_active ? 'On' : 'Off'}</span>
+                        </>
+                      )}
                     </button>
                     <button
                       onClick={() => deleteFile(file.id, file.storage_path)}

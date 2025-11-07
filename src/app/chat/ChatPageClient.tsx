@@ -12,6 +12,15 @@ interface ChatMessage {
   tokens_used?: number
 }
 
+interface FileOption {
+  id: string
+  name: string
+  supplier: string | null
+  openai_file_id: string
+  openai_vector_file_id: string | null
+  displayName: string
+}
+
 const STORAGE_KEY = 'neuralitica_chat_conversation_id'
 
 export default function ChatPageClient() {
@@ -21,8 +30,15 @@ export default function ChatPageClient() {
   const [lastResponseTime, setLastResponseTime] = useState<number | null>(null)
   const [conversationId, setConversationId] = useState<string | null>(null)
   const [isRestoring, setIsRestoring] = useState(true)
+  const [files, setFiles] = useState<FileOption[]>([])
+  const [selectedFiles, setSelectedFiles] = useState<FileOption[]>([])
+  const [showMentions, setShowMentions] = useState(false)
+  const [mentionQuery, setMentionQuery] = useState('')
+  const [mentionIndex, setMentionIndex] = useState(0)
+  const [selectedMentionIndex, setSelectedMentionIndex] = useState(0)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const mentionDropdownRef = useRef<HTMLDivElement>(null)
 
   // Scroll to bottom when messages change
   const scrollToBottom = () => {
@@ -107,6 +123,45 @@ export default function ChatPageClient() {
     }
   }, [conversationId])
 
+  // Fetch available files for mentions
+  useEffect(() => {
+    const fetchFiles = async () => {
+      try {
+        const response = await fetch('/api/chat/files')
+        if (response.ok) {
+          const data = await response.json()
+          if (data.success) {
+            setFiles(data.files || [])
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching files:', error)
+      }
+    }
+    fetchFiles()
+  }, [])
+
+  // Close mentions dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        mentionDropdownRef.current &&
+        !mentionDropdownRef.current.contains(event.target as Node) &&
+        textareaRef.current &&
+        !textareaRef.current.contains(event.target as Node)
+      ) {
+        setShowMentions(false)
+      }
+    }
+
+    if (showMentions) {
+      document.addEventListener('mousedown', handleClickOutside)
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside)
+      }
+    }
+  }, [showMentions])
+
   const sendMessage = async () => {
     if (!inputMessage.trim() || loading) return
 
@@ -117,7 +172,9 @@ export default function ChatPageClient() {
     }
 
     setMessages(prev => [...prev, userMessage])
+    const messageToSend = inputMessage.trim()
     setInputMessage('')
+    // Keep selected files - user can remove them manually if needed
     setLoading(true)
 
     try {
@@ -127,8 +184,9 @@ export default function ChatPageClient() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          message: inputMessage.trim(),
+          message: messageToSend,
           conversationId: conversationId,
+          fileIds: selectedFiles.map(f => f.id), // Send selected file IDs
           // User ID will be extracted from session on server-side
           conversationHistory: messages.slice(-10).map(msg => ({
             role: msg.role,
@@ -195,11 +253,99 @@ export default function ChatPageClient() {
     focusTextarea()
   }
 
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const value = e.target.value
+    setInputMessage(value)
+
+    // Check for @ mention
+    const cursorPosition = e.target.selectionStart
+    const textBeforeCursor = value.substring(0, cursorPosition)
+    const lastAtIndex = textBeforeCursor.lastIndexOf('@')
+    
+    if (lastAtIndex !== -1) {
+      const textAfterAt = textBeforeCursor.substring(lastAtIndex + 1)
+      // Check if there's a space or newline after @ (meaning mention ended)
+      if (textAfterAt.includes(' ') || textAfterAt.includes('\n')) {
+        setShowMentions(false)
+        setMentionQuery('')
+      } else {
+        // Show mentions dropdown
+        setShowMentions(true)
+        setMentionIndex(lastAtIndex)
+        setMentionQuery(textAfterAt.toLowerCase())
+        setSelectedMentionIndex(0)
+      }
+    } else {
+      setShowMentions(false)
+      setMentionQuery('')
+    }
+  }
+
+  const handleKeyPress = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (showMentions) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        setSelectedMentionIndex(prev => {
+          const filtered = getFilteredFiles()
+          return prev < filtered.length - 1 ? prev + 1 : prev
+        })
+        return
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        setSelectedMentionIndex(prev => prev > 0 ? prev - 1 : 0)
+        return
+      }
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault()
+        selectFile(getFilteredFiles()[selectedMentionIndex])
+        return
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        setShowMentions(false)
+        return
+      }
+    }
+
+    if (e.key === 'Enter' && !e.shiftKey && !showMentions) {
       e.preventDefault()
       sendMessage()
     }
+  }
+
+  const getFilteredFiles = () => {
+    if (!mentionQuery) return files
+    return files.filter(file => 
+      file.displayName.toLowerCase().includes(mentionQuery) ||
+      file.name.toLowerCase().includes(mentionQuery) ||
+      (file.supplier && file.supplier.toLowerCase().includes(mentionQuery))
+    )
+  }
+
+  const selectFile = (file: FileOption) => {
+    if (!file || selectedFiles.find(f => f.id === file.id)) return
+
+    setSelectedFiles(prev => [...prev, file])
+    
+    // Remove @ mention from input
+    const textBeforeAt = inputMessage.substring(0, mentionIndex)
+    const textAfterMention = inputMessage.substring(mentionIndex + 1 + mentionQuery.length)
+    setInputMessage(textBeforeAt + textAfterMention)
+    
+    setShowMentions(false)
+    setMentionQuery('')
+    
+    // Refocus textarea
+    setTimeout(() => {
+      textareaRef.current?.focus()
+      const newPosition = textBeforeAt.length
+      textareaRef.current?.setSelectionRange(newPosition, newPosition)
+    }, 0)
+  }
+
+  const removeFile = (fileId: string) => {
+    setSelectedFiles(prev => prev.filter(f => f.id !== fileId))
   }
 
   return (
@@ -385,13 +531,79 @@ export default function ChatPageClient() {
       {/* Input Area - Fixed at bottom */}
       <div className="bg-gradient-to-r from-slate-50 to-blue-50 px-3 sm:px-6 py-3 sm:py-4 border-t border-slate-200/80 flex-shrink-0">
         <div className="flex items-start space-x-2 sm:space-x-4">
-          <div className="flex-1 min-w-0">
+          <div className="flex-1 min-w-0 relative">
+            {/* Selected files tags */}
+            {selectedFiles.length > 0 && (
+              <div className="mb-2 flex flex-wrap gap-2">
+                {selectedFiles.map(file => (
+                  <span
+                    key={file.id}
+                    className="inline-flex items-center px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-lg border border-blue-200"
+                  >
+                    <svg className="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                    </svg>
+                    <span className="max-w-[200px] truncate">{file.displayName}</span>
+                    <button
+                      onClick={() => removeFile(file.id)}
+                      className="ml-1 hover:text-blue-900"
+                      type="button"
+                    >
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {/* Mention dropdown */}
+            {showMentions && (
+              <div
+                ref={mentionDropdownRef}
+                className="absolute bottom-full left-0 right-0 mb-2 bg-white border border-slate-200 rounded-lg shadow-xl max-h-60 overflow-y-auto z-50"
+              >
+                {getFilteredFiles().length > 0 ? (
+                  getFilteredFiles().map((file, index) => (
+                    <button
+                      key={file.id}
+                      onClick={() => selectFile(file)}
+                      className={`w-full px-4 py-2 text-left hover:bg-blue-50 transition-colors ${
+                        index === selectedMentionIndex ? 'bg-blue-50' : ''
+                      } ${selectedFiles.find(f => f.id === file.id) ? 'opacity-50' : ''}`}
+                      disabled={!!selectedFiles.find(f => f.id === file.id)}
+                    >
+                      <div className="flex items-center">
+                        <svg className="w-4 h-4 mr-2 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-slate-900 truncate">{file.name}</p>
+                          {file.supplier && (
+                            <p className="text-xs text-slate-500 truncate">{file.supplier}</p>
+                          )}
+                        </div>
+                        {selectedFiles.find(f => f.id === file.id) && (
+                          <svg className="w-4 h-4 text-blue-500 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                        )}
+                      </div>
+                    </button>
+                  ))
+                ) : (
+                  <div className="px-4 py-2 text-sm text-slate-500">No se encontraron archivos</div>
+                )}
+              </div>
+            )}
+
             <textarea
               ref={textareaRef}
               value={inputMessage}
-              onChange={(e) => setInputMessage(e.target.value)}
-              onKeyPress={handleKeyPress}
-              placeholder="Pregunta sobre información de los archivos..."
+              onChange={handleInputChange}
+              onKeyDown={handleKeyPress}
+              placeholder="Pregunta sobre información de los archivos... (usa @ para mencionar archivos específicos)"
               disabled={loading}
               className="w-full px-3 sm:px-4 py-2 sm:py-3 bg-white border border-slate-300 text-slate-800 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none placeholder:text-slate-500 shadow-sm transition-all duration-200 text-sm sm:text-base"
               rows={2}

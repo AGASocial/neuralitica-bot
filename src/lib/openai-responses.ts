@@ -114,14 +114,19 @@ Instrucciones:
 
 Eres un asistente que responde preguntas utilizando EXCLUSIVAMENTE la información disponible en los archivos conectados (PDF, DOCX, CSV, imágenes con OCR, etc.). Si la evidencia no existe en los archivos, dilo claramente y sugiere qué documento cargar o activar.
 
+IMPORTANTE: Los archivos proporcionados están disponibles a través de la herramienta de búsqueda de archivos. SIEMPRE debes usar la herramienta file_search para buscar información en los archivos antes de responder. No asumas que no hay información sin haber buscado primero.
+
 Reglas de búsqueda
-  1. Busca en TODOS los archivos y vector stores disponibles.
-  2. Considera variaciones, sinónimos y términos relacionados de la consulta.
-  3. Cuando extraigas información, intenta mencionar el nombre del archivo (sin extensión) como fuente.
+  1. SIEMPRE usa la herramienta file_search para buscar en los archivos disponibles.
+  2. Busca en TODOS los archivos y vector stores disponibles en la herramienta.
+  3. Considera variaciones, sinónimos y términos relacionados de la consulta.
+  4. Cuando extraigas información, intenta mencionar el nombre del archivo (sin extensión) como fuente.
+  5. Si la búsqueda no devuelve resultados, intenta con términos alternativos o más generales.
 
 Cobertura (obligatoria)
   1. Cubre todas las fuentes relevantes. Si una fuente no tiene coincidencias, indícalo.
   2. No mezcles datos de distintas fuentes sin aclarar su origen.
+  3. Si no encuentras información después de buscar, di claramente "No encontré información sobre [tema] en los archivos proporcionados".
 
 Formato de respuesta (Markdown)
   • Responde en el idioma de la consulta (español por defecto).
@@ -137,7 +142,8 @@ Formato de respuesta (Markdown)
 Políticas
   • No inventes datos ni asumas valores no presentes.
   • Si la evidencia es insuficiente, explica qué falta y qué cargar.
-  • No expongas información sensible que no esté explícitamente en los archivos.`
+  • No expongas información sensible que no esté explícitamente en los archivos.
+  • SIEMPRE busca en los archivos usando la herramienta antes de decir que no hay información.`
 
     // Build messages preserving roles
     const dynamicInstructions = await getSystemInstructions()
@@ -150,7 +156,12 @@ Políticas
       { role: 'user' as const, content: query }
     ]
 
-    console.log('inputMessages', inputMessages);
+    console.log('📨 OpenAI Request:')
+    console.log(`  Model: gpt-4o-mini`)
+    console.log(`  Vector Stores: ${vectorStoreIds.join(', ')}`)
+    console.log(`  Messages: ${inputMessages.length} messages`)
+    console.log(`  Query: "${query}"`)
+    console.log(`  Tool: file_search with ${vectorStoreIds.length} vector store(s)`)
 
     const response = await openai.responses.create({
       model: 'gpt-4o-mini',
@@ -168,16 +179,24 @@ Políticas
       max_output_tokens: 400,
       stream: false
     })
+    
+    console.log(`📥 OpenAI Response (initial):`)
+    console.log(`  Status: ${response.status}`)
+    console.log(`  ID: ${response.id}`)
 
     // Poll if needed (Responses can be async)
     let finalResponse = response
     if (response.status === 'in_progress') {
+      console.log(`⏳ Response is in_progress, polling...`)
       let attempts = 0
       const maxAttempts = 30 // up to ~15s
       while (finalResponse.status === 'in_progress' && attempts < maxAttempts) {
         await new Promise(r => setTimeout(r, 500))
         finalResponse = await openai.responses.retrieve(response.id)
         attempts++
+        if (attempts % 5 === 0) {
+          console.log(`  Polling attempt ${attempts}/${maxAttempts}, status: ${finalResponse.status}`)
+        }
       }
     }
 
@@ -185,6 +204,30 @@ Políticas
       const processingTime = Date.now() - startTime
       const performanceStatus =
         processingTime <= 60 ? 'EXCELLENT 🚀' : processingTime <= 120 ? 'GOOD ⚡' : 'ACCEPTABLE ⏰'
+
+      // Log detailed output structure
+      console.log(`📥 OpenAI Response (final):`)
+      console.log(`  Status: ${finalResponse.status}`)
+      console.log(`  Output items: ${finalResponse.output?.length || 0}`)
+      
+      // Log file_search calls and results
+      if (Array.isArray(finalResponse.output)) {
+        finalResponse.output.forEach((item, idx) => {
+          if (item.type === 'file_search_call') {
+            console.log(`  [${idx}] File Search Call:`)
+            console.log(`    Status: ${item.status}`)
+            console.log(`    Queries: ${JSON.stringify(item.queries || [])}`)
+            console.log(`    Results: ${item.results ? `${item.results.length} results` : 'null'}`)
+            if (item.results && Array.isArray(item.results)) {
+              console.log(`    Result details: ${item.results.map((r: any) => r.file_id || r.id || 'unknown').join(', ')}`)
+            }
+          } else if (item.type === 'message') {
+            console.log(`  [${idx}] Message:`)
+            console.log(`    Status: ${item.status}`)
+            console.log(`    Content items: ${item.content?.length || 0}`)
+          }
+        })
+      }
 
       // Extract text safely
       let content = 'No se pudo procesar la consulta.'
@@ -198,6 +241,7 @@ Políticas
 
       console.log(`🎉 OPTIMAL SEARCH completed in ${processingTime}ms - ${performanceStatus}`)
       console.log(`📊 Processed ${vectorStoreIds.length} vector stores | tokens=${finalResponse.usage?.total_tokens ?? 0}`)
+      console.log(`📝 Response content length: ${content.length} characters`)
 
       return {
         content,
@@ -207,6 +251,7 @@ Políticas
     } else {
       const processingTime = Date.now() - startTime
       console.error(`❌ Optimal search failed with status: ${finalResponse.status}`)
+      console.error(`❌ Full response:`, JSON.stringify(finalResponse, null, 2))
       throw new Error(`La consulta no pudo completarse. Estado: ${finalResponse.status}`)
     }
 
