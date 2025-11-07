@@ -1,20 +1,22 @@
 'use client'
 
 import { useState } from 'react'
+import { useToast } from '@/contexts/ToastContext'
 
 export default function MessagesManagementClient() {
+  const { showError, showWarning } = useToast()
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
   const [loading, setLoading] = useState(false)
 
   const downloadCSV = async () => {
     if (!startDate || !endDate) {
-      alert('Por favor selecciona ambas fechas')
+      showWarning('Por favor selecciona ambas fechas')
       return
     }
 
     if (new Date(startDate) > new Date(endDate)) {
-      alert('La fecha inicial debe ser anterior a la fecha final')
+      showWarning('La fecha inicial debe ser anterior a la fecha final')
       return
     }
 
@@ -48,7 +50,7 @@ export default function MessagesManagementClient() {
       document.body.removeChild(a)
     } catch (error: any) {
       console.error('Error downloading CSV:', error)
-      alert(error.message || 'Error al descargar el archivo')
+      showError(error.message || 'Error al descargar el archivo')
     } finally {
       setLoading(false)
     }

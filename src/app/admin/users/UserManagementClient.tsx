@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { formatDateVE } from '@/lib/date-utils'
+import { useToast } from '@/contexts/ToastContext'
+import { useConfirmation } from '@/contexts/ConfirmationContext'
 
 interface UserProfile {
   id: string
@@ -14,6 +16,8 @@ interface UserProfile {
 }
 
 export default function UserManagementClient() {
+  const { showSuccess, showError, showInfo } = useToast()
+  const { confirmDanger, confirmWarning } = useConfirmation()
   const [users, setUsers] = useState<UserProfile[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
@@ -44,7 +48,7 @@ export default function UserManagementClient() {
       }
     } catch (error: any) {
       console.error('Error fetching users:', error)
-      alert(`Error al obtener usuarios: ${error.message}`)
+      showError(`Error al obtener usuarios: ${error.message}`)
     } finally {
       setLoading(false)
     }
@@ -78,7 +82,7 @@ export default function UserManagementClient() {
       }
     } catch (error: any) {
       console.error('Error toggling user status:', error)
-      alert(`Error al actualizar usuario: ${error.message}`)
+      showError(`Error al actualizar usuario: ${error.message}`)
     }
   }
 
@@ -91,18 +95,22 @@ export default function UserManagementClient() {
     try {
       // Note: In a real implementation, you would need to handle user invitation
       // This is a simplified version that assumes the user already exists
-      alert('La funcionalidad de invitación de usuarios se implementaría aquí. Por ahora, los usuarios deben registrarse ellos mismos.')
+      showInfo('La funcionalidad de invitación de usuarios se implementaría aquí. Por ahora, los usuarios deben registrarse ellos mismos.')
       setNewUserEmail('')
     } catch (error: any) {
       console.error('Error adding user:', error)
-      alert(`Error al agregar usuario: ${error.message}`)
+      showError(`Error al agregar usuario: ${error.message}`)
     } finally {
       setAddingUser(false)
     }
   }
 
   const deleteUser = async (id: string, email: string) => {
-    if (!confirm(`¿Estás seguro de que quieres eliminar el usuario ${email}?`)) {
+    const confirmed = await confirmDanger(
+      'Eliminar usuario',
+      `¿Estás seguro de que quieres eliminar el usuario ${email}?`
+    )
+    if (!confirmed) {
       return
     }
 
@@ -119,13 +127,13 @@ export default function UserManagementClient() {
       if (result.success) {
         // Update local state
         setUsers(users.filter(user => user.id !== id))
-        alert('¡Usuario eliminado exitosamente!')
+        showSuccess('¡Usuario eliminado exitosamente!')
       } else {
         throw new Error(result.error || 'Failed to delete user')
       }
     } catch (error: any) {
       console.error('Error deleting user:', error)
-      alert(`Error al eliminar usuario: ${error.message}`)
+      showError(`Error al eliminar usuario: ${error.message}`)
     }
   }
 
@@ -181,13 +189,13 @@ export default function UserManagementClient() {
             : user
         ))
         closeSubscriptionModal()
-        alert('¡Suscripción actualizada exitosamente!')
+        showSuccess('¡Suscripción actualizada exitosamente!')
       } else {
         throw new Error(result.error || 'Failed to update subscription')
       }
     } catch (error: any) {
       console.error('Error updating subscription:', error)
-      alert(`Error al actualizar suscripción: ${error.message}`)
+      showError(`Error al actualizar suscripción: ${error.message}`)
     } finally {
       setUpdatingSubscription(false)
     }
@@ -210,8 +218,12 @@ export default function UserManagementClient() {
     updateSubscriptionDate(newDate)
   }
 
-  const handleInvalidateSubscription = () => {
-    if (!confirm('¿Estás seguro de que quieres invalidar esta suscripción? El usuario necesitará pagar nuevamente para acceder al sistema.')) {
+  const handleInvalidateSubscription = async () => {
+    const confirmed = await confirmWarning(
+      'Invalidar suscripción',
+      '¿Estás seguro de que quieres invalidar esta suscripción? El usuario necesitará pagar nuevamente para acceder al sistema.'
+    )
+    if (!confirmed) {
       return
     }
 

@@ -4,10 +4,12 @@ import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { formatDateVE } from '@/lib/date-utils'
+import { useToast } from '@/contexts/ToastContext'
 
 export default function ExpiredPage() {
   const { user, profile, signOut } = useAuth()
   const router = useRouter()
+  const { showInfo } = useToast()
 
   useEffect(() => {
     console.log('ExpiredPage: useEffect triggered', user, profile)
@@ -43,7 +45,7 @@ export default function ExpiredPage() {
 
   const handleContactAdmin = () => {
     // You can customize this to open email client or contact form
-    alert('Soporte --- info@neuraliti.ca')
+    showInfo('Soporte --- info@neuraliti.ca')
     return;
   }
 

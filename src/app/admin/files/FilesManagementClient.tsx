@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { formatDateVE } from '@/lib/date-utils'
+import { useToast } from '@/contexts/ToastContext'
+import { useConfirmation } from '@/contexts/ConfirmationContext'
 
 interface PriceList {
   id: string
@@ -126,6 +128,8 @@ function VectorStoreStatusBadge({ priceListId, vectorStatus, statusLoading, isAc
 }
 
 export default function FilesManagementClient() {
+  const { showSuccess, showError, showWarning, showInfo } = useToast()
+  const { confirmDanger, confirmWarning } = useConfirmation()
   const [files, setFiles] = useState<PriceList[]>([])
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
@@ -234,7 +238,7 @@ export default function FilesManagementClient() {
     const skipped = filesArray.length - pdfFiles.length
 
     if (pdfFiles.length === 0) {
-      alert('Por favor selecciona archivos PDF')
+      showWarning('Por favor selecciona archivos PDF')
       return
     }
 
@@ -284,10 +288,15 @@ export default function FilesManagementClient() {
       if (successCount > 0) parts.push(`¡${successCount} archivo(s) subido(s) exitosamente a OpenAI!`)
       if (skipped > 0) parts.push(`${skipped} archivo(s) no eran PDF y fueron ignorados.`)
       if (errors.length > 0) parts.push(`Errores:\n- ${errors.join('\n- ')}`)
-      alert(parts.join('\n\n'))
+      
+      if (errors.length > 0) {
+        showWarning(parts.join('\n\n'))
+      } else {
+        showSuccess(parts.join('\n\n'))
+      }
     } catch (error: any) {
       console.error('Error uploading files:', error)
-      alert(`Error al subir archivos: ${error.message}`)
+      showError(`Error al subir archivos: ${error.message}`)
     } finally {
       setUploading(false)
     }
@@ -396,15 +405,19 @@ export default function FilesManagementClient() {
       // Refresh vector store status since file activation may trigger processing
       await fetchVectorStoreStatus()
 
-      alert(`¡Archivo ${result.is_active ? 'activado' : 'desactivado'} exitosamente! Tiempo de procesamiento: ${result.processing_time_ms}ms`)
+      showSuccess(`¡Archivo ${result.is_active ? 'activado' : 'desactivado'} exitosamente! Tiempo de procesamiento: ${result.processing_time_ms}ms`)
     } catch (error: any) {
       console.error('Error toggling file status:', error)
-      alert(`Error al actualizar archivo: ${error.message}`)
+      showError(`Error al actualizar archivo: ${error.message}`)
     }
   }
 
   const deleteFile = async (id: string, storagePath: string) => {
-    if (!confirm('¿Estás seguro de que quieres eliminar este archivo? Esto lo eliminará de OpenAI, almacenes vectoriales y todos los sistemas de almacenamiento.')) {
+    const confirmed = await confirmDanger(
+      'Eliminar archivo',
+      '¿Estás seguro de que quieres eliminar este archivo? Esto lo eliminará de OpenAI, almacenes vectoriales y todos los sistemas de almacenamiento.'
+    )
+    if (!confirmed) {
       return
     }
 
@@ -435,18 +448,22 @@ export default function FilesManagementClient() {
       setFiles(files.filter(file => file.id !== id))
       
       if (result.success) {
-        alert(`¡Archivo eliminado exitosamente de todos los sistemas! Tiempo de procesamiento: ${result.processing_time_ms}ms`)
+        showSuccess(`¡Archivo eliminado exitosamente de todos los sistemas! Tiempo de procesamiento: ${result.processing_time_ms}ms`)
       } else {
-        alert(`Eliminación parcial completada. Algunos sistemas pueden requerir limpieza manual. Tiempo de procesamiento: ${result.processing_time_ms}ms`)
+        showWarning(`Eliminación parcial completada. Algunos sistemas pueden requerir limpieza manual. Tiempo de procesamiento: ${result.processing_time_ms}ms`)
       }
     } catch (error: any) {
       console.error('Error deleting file:', error)
-      alert(`Error al eliminar archivo: ${error.message}`)
+      showError(`Error al eliminar archivo: ${error.message}`)
     }
   }
 
   const syncMasterVectorStore = async () => {
-    if (!confirm('¿Estás seguro de que quieres sincronizar el Master Vector Store? Esto asegurará que todos los archivos activos estén correctamente sincronizados.')) {
+    const confirmed = await confirmWarning(
+      'Sincronizar Master Vector Store',
+      '¿Estás seguro de que quieres sincronizar el Master Vector Store? Esto asegurará que todos los archivos activos estén correctamente sincronizados.'
+    )
+    if (!confirmed) {
       return
     }
 
@@ -476,10 +493,10 @@ export default function FilesManagementClient() {
       // Refresh vector store status after sync
       await fetchVectorStoreStatus()
       
-      alert(`¡Sincronización completada exitosamente!\n\nArchivos agregados: ${result.sync_result.added}\nArchivos removidos: ${result.sync_result.removed}\nTiempo de procesamiento: ${result.processing_time_ms}ms`)
+      showSuccess(`¡Sincronización completada exitosamente!\n\nArchivos agregados: ${result.sync_result.added}\nArchivos removidos: ${result.sync_result.removed}\nTiempo de procesamiento: ${result.processing_time_ms}ms`)
     } catch (error: any) {
       console.error('Error syncing master vector store:', error)
-      alert(`Error al sincronizar: ${error.message}`)
+      showError(`Error al sincronizar: ${error.message}`)
     } finally {
       setSyncing(false)
     }
