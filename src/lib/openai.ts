@@ -1,4 +1,4 @@
-import { openai } from './openai-client'
+import { openaiDirect as openai } from './openai-client'
 export { openai }
 
 export interface ChatMessage {

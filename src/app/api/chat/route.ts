@@ -106,7 +106,8 @@ export async function POST(request: NextRequest) {
       aiResponse = await queryPricesFast(
         message,
         [masterStoreId], // Single master vector store containing all PDFs
-        conversationHistory
+        conversationHistory,
+        session.user.email || session.user.id
       )
       queryTime = Date.now() - queryStartTime
       console.log('🔍 OpenAI query completed successfully, about to start message storage...')

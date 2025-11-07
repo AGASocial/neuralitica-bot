@@ -45,7 +45,14 @@ export async function middleware(req: NextRequest) {
   } = await supabase.auth.getSession()
 
   // Public routes that don't require authentication
-  const publicRoutes = ['/auth/signin', '/auth/signup', '/auth/callback', '/api/auth/']
+  const allowPublicStatus = process.env.ALLOW_PUBLIC_STATUS === 'true'
+  const publicRoutes = [
+    '/auth/signin',
+    '/auth/signup',
+    '/auth/callback',
+    '/api/auth/',
+    ...(allowPublicStatus ? ['/api/admin/vector-store-status'] : []),
+  ]
   const pathname = req.nextUrl.pathname
   const isPublicRoute = publicRoutes.some(route => pathname.startsWith(route)) || pathname === '/'
 

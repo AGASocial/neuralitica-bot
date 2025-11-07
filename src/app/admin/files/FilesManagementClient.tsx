@@ -177,7 +177,7 @@ export default function FilesManagementClient() {
   const fetchVectorStoreStatus = async () => {
     try {
       setStatusLoading(true)
-      const response = await fetch('/api/admin/vector-store-status')
+      const response = await fetch(`/api/admin/vector-store-status?ts=${Date.now()}`, { cache: 'no-store' })
       
       if (!response.ok) {
         throw new Error('Failed to fetch vector store status')

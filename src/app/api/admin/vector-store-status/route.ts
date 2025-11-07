@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createSupabaseAdmin } from '@/lib/supabase'
-import { openai } from '@/lib/openai'
+import { openaiNoCache as openai } from '@/lib/openai-client'
+
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
 export async function GET(request: NextRequest) {
   try {
@@ -27,7 +30,7 @@ export async function GET(request: NextRequest) {
         success: true,
         vector_stores: [],
         message: 'No active file from vector stores found'
-      })
+      }, { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } })
     }
 
     // Check status of each vector store with OpenAI
@@ -168,7 +171,7 @@ export async function GET(request: NextRequest) {
       vector_stores: successfulResults,
       failed_requests: failedResults,
       timestamp: new Date().toISOString()
-    })
+    }, { headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } })
 
   } catch (error: any) {
     console.error('API error checking vector store status:', error)
@@ -178,7 +181,7 @@ export async function GET(request: NextRequest) {
         details: error.message,
         timestamp: new Date().toISOString()
       },
-      { status: 500 }
+      { status: 500, headers: { 'Cache-Control': 'no-store, no-cache, must-revalidate' } }
     )
   }
 }
@@ -201,23 +204,30 @@ function determineHealthStatus(vectorStore: any, files: any[]): 'healthy' | 'par
 
   // If vector store is completed, check file statuses
   if (vectorStore.status === 'completed') {
+    // Prefer detailed file statuses when available
     const totalFiles = files.length
     const completedFiles = files.filter(file => file.status === 'completed').length
     const failedFiles = files.filter(file => file.status === 'failed').length
 
-    if (totalFiles === 0) {
-      return 'unhealthy' // No files in vector store
+    if (totalFiles > 0) {
+      if (completedFiles === totalFiles) {
+        return 'healthy' // All files completed
+      }
+      if (completedFiles > 0 && failedFiles < totalFiles) {
+        return 'partially_healthy' // Some files completed
+      }
+      return 'unhealthy' // Most or all files failed
     }
 
-    if (completedFiles === totalFiles) {
-      return 'healthy' // All files completed
+    // Fallback to vector store aggregates when file list is empty
+    const counts = vectorStore.file_counts || { total: 0, completed: 0, failed: 0, in_progress: 0 }
+    if (counts.total > 0 && counts.completed === counts.total) {
+      return 'healthy'
+    } else if (counts.completed > 0 && counts.completed < counts.total) {
+      return 'partially_healthy'
+    } else {
+      return 'unhealthy'
     }
-
-    if (completedFiles > 0 && failedFiles < totalFiles) {
-      return 'partially_healthy' // Some files completed
-    }
-
-    return 'unhealthy' // Most or all files failed
   }
 
   return 'unhealthy' // Unknown status

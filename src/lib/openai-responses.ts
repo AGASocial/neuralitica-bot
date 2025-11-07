@@ -1,4 +1,4 @@
-import { openai } from './openai-client'
+import { createOpenAIClient } from './openai-client'
 import { createSupabaseAdmin } from '@/lib/supabase'
 
 let cachedSystemInstructions: { text: string | null; fetchedAt: number } | null = null
@@ -60,11 +60,16 @@ export interface OpenAIResponse {
 export async function queryPricesFast(
   query: string,
   vectorStoreIds: string[],
-  conversationHistory: ChatMessage[] = []
+  conversationHistory: ChatMessage[] = [],
+  userIdentifier?: string | null
 ): Promise<OpenAIResponse> {
   const startTime = Date.now()
 
   try {
+    // Build a per-request OpenAI client to attach user identity for Helicone analytics
+    const userHeader = userIdentifier ? { 'Helicone-User-Id': userIdentifier } : undefined
+    const openai = createOpenAIClient({ additionalHeaders: userHeader })
+
     if (vectorStoreIds.length === 0) {
       // Fallback: plain chat (no retrieval). Used when no vector stores are available.
       const systemPrompt = `Eres un asistente que responde preguntas basándote principalmente en los documentos y archivos proporcionados (PDF, DOCX, CSV, imágenes, etc.).
